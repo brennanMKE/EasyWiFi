@@ -26,9 +26,12 @@ RunLoop::RunLoop() :
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 }
 
-void RunLoop::setup() {
+void RunLoop::setup(const String& name) {
+    // Store device name for use throughout the system
+    deviceName = name;
+    
     ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "EasyWiFi Starting");
+    ESP_LOGI(TAG, "%s Starting", deviceName.c_str());
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "Free memory: %d bytes", esp_get_free_heap_size());
     
@@ -47,8 +50,9 @@ void RunLoop::setup() {
         statusLED.setBrightness(LED_BRIGHTNESS);
     }
     
-    // Wire up RunLoop reference to ConfigServer
+    // Wire up RunLoop reference and device name to ConfigServer
     configServer.setRunLoop(this);
+    configServer.setDeviceName(deviceName);
     
     transitionToState(INITIALIZING);
 }
@@ -217,8 +221,8 @@ void RunLoop::handleConnected() {
             wifiManager.stopAccessPoint();
         }
         
-        // Start mDNS
-        if (wifiManager.startMDNS()) {
+        // Start mDNS with custom device name
+        if (wifiManager.startMDNS(deviceName)) {
             wifiManager.announceMDNS();
         }
         
@@ -257,7 +261,7 @@ void RunLoop::handleAPMode() {
     if (!setupComplete) {
         ESP_LOGI(TAG, "Starting Access Point mode...");
         
-        if (!wifiManager.startAccessPoint()) {
+        if (!wifiManager.startAccessPoint(deviceName)) {
             ESP_LOGE(TAG, "Failed to start Access Point");
             transitionToState(ERROR);
             return;
@@ -276,7 +280,7 @@ void RunLoop::handleAPMode() {
         statusLED.setPattern(LED_SLOW_BLINK);
         
         ESP_LOGI(TAG, "========================================");
-        ESP_LOGI(TAG, "EasyWiFi - Configuration Mode");
+        ESP_LOGI(TAG, "%s - Configuration Mode", deviceName.c_str());
         ESP_LOGI(TAG, "Connect to: %s", wifiManager.getAPSSID().c_str());
         ESP_LOGI(TAG, "Open browser: http://%s/", wifiManager.getLocalIP().c_str());
         ESP_LOGI(TAG, "Captive portal will auto-redirect");

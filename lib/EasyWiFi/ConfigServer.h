@@ -26,8 +26,10 @@ public:
     
     bool isEnabled();
     void setRunLoop(RunLoop* rl);
+    void setDeviceName(const String& name);
 
 private:
+    String deviceName;
     WebServer server;
     WiFiManager& wifiManager;
     Storage& storage;

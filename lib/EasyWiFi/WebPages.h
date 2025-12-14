@@ -15,6 +15,9 @@ class WebPages {
 public:
     WebPages();
     
+    // Set device name for display in pages
+    void setDeviceName(const String& name) { deviceName = name; }
+    
     // Generate HTML pages
     String generateHomePage(WiFiManager& wifiManager, Storage& storage);
     String generateScanPage(const std::vector<WiFiNetwork>& networks, bool success);
@@ -26,6 +29,7 @@ public:
     String generateCredentialsPage(Storage& storage, const String& currentSSID);
 
 private:
+    String deviceName;
     // Common HTML elements
     String getHTMLHeader(const String& title);
     String getHTMLFooter();

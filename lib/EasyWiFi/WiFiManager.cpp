@@ -405,14 +405,14 @@ bool WiFiManager::connectToStoredNetworks(Storage& storage) {
     return error == WiFiError::SUCCESS;
 }
 
-WiFiError WiFiManager::startAccessPointEx(ErrorContext* outError) {
+WiFiError WiFiManager::startAccessPointEx(const String& deviceName, ErrorContext* outError) {
     if (apActive) {
         ESP_LOGI(TAG, "Access Point already active");
         return WiFiError::SUCCESS;
     }
     
-    // Generate unique AP SSID
-    apSSID = generateAPSSID();
+    // Generate unique AP SSID with custom device name
+    apSSID = generateAPSSID(deviceName);
     apPassword = AP_PASSWORD;
     
     ESP_LOGI(TAG, "Starting Access Point: %s", apSSID.c_str());
@@ -476,8 +476,8 @@ WiFiError WiFiManager::startAccessPointEx(ErrorContext* outError) {
 }
 
 // Backward compatible wrapper
-bool WiFiManager::startAccessPoint() {
-    WiFiError error = startAccessPointEx(nullptr);
+bool WiFiManager::startAccessPoint(const String& deviceName) {
+    WiFiError error = startAccessPointEx(deviceName, nullptr);
     return error == WiFiError::SUCCESS;
 }
 
@@ -634,37 +634,39 @@ const char* WiFiManager::getWiFiStatusName(wl_status_t status) {
     }
 }
 
-String WiFiManager::generateAPSSID() {
+String WiFiManager::generateAPSSID(const String& deviceName) {
     // Get MAC address
     uint8_t mac[6];
     WiFi.macAddress(mac);
     
-    // Create SSID with last 3 bytes of MAC
+    // Create SSID with device name and last 3 bytes of MAC
     char ssid[32];
-    snprintf(ssid, sizeof(ssid), "%s%02X%02X%02X", 
-             AP_SSID_PREFIX, 
+    snprintf(ssid, sizeof(ssid), "%s-Setup-%02X%02X%02X", 
+             deviceName.c_str(), 
              mac[3], mac[4], mac[5]);
     
     return String(ssid);
 }
 
-bool WiFiManager::startMDNS(const String& hostname) {
+bool WiFiManager::startMDNS(const String& deviceName) {
     if (mdnsActive) {
         ESP_LOGI(TAG, "mDNS already active");
         return true;
     }
     
-    // Use provided hostname or generate one
-    String mdnsName = hostname;
-    if (mdnsName.length() == 0) {
-        // Generate hostname from device MAC
-        uint8_t mac[6];
-        WiFi.macAddress(mac);
-        char name[32];
-        snprintf(name, sizeof(name), "easywifi-%02x%02x%02x", 
-                 mac[3], mac[4], mac[5]);
-        mdnsName = String(name);
-    }
+    // Generate hostname from device name and MAC
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    
+    // Convert device name to lowercase and replace spaces with hyphens for hostname
+    String mdnsName = deviceName;
+    mdnsName.toLowerCase();
+    mdnsName.replace(" ", "-");
+    
+    char name[32];
+    snprintf(name, sizeof(name), "%s-%02x%02x%02x", 
+             mdnsName.c_str(), mac[3], mac[4], mac[5]);
+    mdnsName = String(name);
     
     ESP_LOGI(TAG, "Starting mDNS with hostname: %s", mdnsName.c_str());
     

@@ -6,7 +6,8 @@
 static const char *TAG = TAG_CONFIG_SERVER;
 
 ConfigServer::ConfigServer(WiFiManager& wifiManager, Storage& storage) 
-    : server(WEB_SERVER_PORT), 
+    : deviceName("EasyWiFi"),
+      server(WEB_SERVER_PORT), 
       wifiManager(wifiManager), 
       storage(storage),
       webPages(),
@@ -17,6 +18,11 @@ ConfigServer::ConfigServer(WiFiManager& wifiManager, Storage& storage)
 
 void ConfigServer::setRunLoop(RunLoop* rl) {
     runLoop = rl;
+}
+
+void ConfigServer::setDeviceName(const String& name) {
+    deviceName = name;
+    webPages.setDeviceName(name);
 }
 
 void ConfigServer::enableCORS() {

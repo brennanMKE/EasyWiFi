@@ -17,7 +17,20 @@ void setup() {
     ESP_LOGI(TAG, "ESP32-C3 WiFi Configuration System");
     ESP_LOGI(TAG, "========================================");
     
-    runloop.setup();
+    // Initialize with custom device name (or use default "EasyWiFi")
+    // This name will be used for:
+    // - AP SSID: MyDevice-Setup-XXXXXX
+    // - mDNS hostname: mydevice-xxxxxx.local
+    // - Web page titles and headers
+    // 
+    // Examples:
+    //   runloop.setup("SmartLED");     // For LED controller
+    //   runloop.setup("TempSensor");   // For temperature sensor
+    //   runloop.setup("Garden IoT");   // For garden controller
+    //   runloop.setup();               // Use default "EasyWiFi"
+    //
+    // See Docs/Customization.md for more details
+    runloop.setup("Lanterns");  // Change to your device name
 }
 
 void loop() {

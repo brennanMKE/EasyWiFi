@@ -39,10 +39,10 @@ public:
     bool connectToStoredNetworks(Storage& storage);
     
     WiFiError connectToStoredNetworksEx(Storage& storage, ErrorContext* outError = nullptr);
-    WiFiError startAccessPointEx(ErrorContext* outError = nullptr);
+    WiFiError startAccessPointEx(const String& deviceName = "EasyWiFi", ErrorContext* outError = nullptr);
     
     // Start Access Point mode
-    bool startAccessPoint();
+    bool startAccessPoint(const String& deviceName = "EasyWiFi");
     
     // Stop Access Point mode
     void stopAccessPoint();
@@ -70,7 +70,7 @@ public:
     String getLocalIP();
     
     // mDNS support
-    bool startMDNS(const String& hostname = "");
+    bool startMDNS(const String& deviceName = "EasyWiFi");
     void announceMDNS();
     String getMDNSHostname();
     
@@ -103,8 +103,8 @@ private:
     // Get WiFi disconnect reason as human-readable string
     const char* getDisconnectReasonName(uint8_t reason);
     
-    // Generate unique AP SSID from device MAC
-    String generateAPSSID();
+    // Generate unique AP SSID from device MAC with custom device name
+    String generateAPSSID(const String& deviceName = "EasyWiFi");
     
     // Log detailed WiFi diagnostics
     void logWiFiDiagnostics();

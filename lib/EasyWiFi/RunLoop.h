@@ -16,10 +16,11 @@
 class RunLoop {
 public:
     RunLoop();
-    void setup();
+    void setup(const String& deviceName = "EasyWiFi");
     void loop();
 
 private:
+    String deviceName;
     Storage storage;
     WiFiManager wifiManager;
     ConfigServer configServer;

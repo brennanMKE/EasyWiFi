@@ -3,15 +3,15 @@
 
 static const char *TAG = TAG_WEB_PAGES;
 
-WebPages::WebPages() {
+WebPages::WebPages() : deviceName("EasyWiFi") {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 }
 
 String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
-    String html = getHTMLHeader("EasyWiFi Setup");
+    String html = getHTMLHeader(deviceName + " Setup");
     
     html += "<div class='card'>";
-    html += "<h1>🌐 EasyWiFi</h1>";
+    html += "<h1>🌐 " + deviceName + "</h1>";
     
     if (wifiManager.isConnected()) {
         html += "<div class='status success'>";
@@ -45,7 +45,7 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         html += "<strong>Configuration Mode</strong>";
         html += "</div>";
 
-        html += "<p style='margin:16px 0;'>Welcome to EasyWiFi! To get started, scan for available networks and configure your WiFi connection.</p>";
+        html += "<p style='margin:16px 0;'>Welcome to " + deviceName + "! To get started, scan for available networks and configure your WiFi connection.</p>";
         
         html += "<div style='background:#f8f9fa;padding:16px;border-radius:8px;margin:16px 0;'>";
         html += "<p style='margin:8px 0;'><strong>Access Point:</strong> " + wifiManager.getAPSSID() + "</p>";
@@ -461,7 +461,7 @@ String WebPages::getHTMLHeader(const String& title) {
 
 String WebPages::getHTMLFooter() {
     String html = "<div class='footer'>";
-    html += "<small>EasyWiFi v0.1 | ESP32-C3</small>";
+    html += "<small>" + deviceName + " v0.1</small>";
     html += "</div>";
     html += "</body></html>";
     return html;
