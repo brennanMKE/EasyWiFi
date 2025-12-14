@@ -1,0 +1,147 @@
+#include "Storage.h"
+#include <esp_log.h>
+
+static const char *TAG = TAG_STORAGE;
+
+Storage::Storage() {
+    // Constructor
+}
+
+bool Storage::begin() {
+    esp_log_level_set(TAG, ESP_LOG_VERBOSE);
+    
+    bool success = preferences.begin(NVS_NAMESPACE, false); // false = read/write mode
+    if (success) {
+        ESP_LOGI(TAG, "NVS storage initialized");
+    } else {
+        ESP_LOGE(TAG, "Failed to initialize NVS storage");
+    }
+    return success;
+}
+
+bool Storage::saveCredentials(const String& ssid, const String& password) {
+    if (ssid.length() == 0) {
+        ESP_LOGE(TAG, "Cannot save credentials: SSID is empty");
+        return false;
+    }
+    
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "Saving WiFi Credentials:");
+    ESP_LOGI(TAG, "  SSID: '%s' (length: %d)", ssid.c_str(), ssid.length());
+    ESP_LOGI(TAG, "  Password length: %d chars", password.length());
+    
+    // Show password with masking for diagnostics
+    String maskedPass = "";
+    if (password.length() <= 4) {
+        maskedPass = "****";
+    } else if (password.length() > 4) {
+        maskedPass = password.substring(0, 2) + 
+                    String("********") + 
+                    password.substring(password.length() - 2);
+    }
+    ESP_LOGI(TAG, "  Password hint: %s", maskedPass.c_str());
+    ESP_LOGI(TAG, "========================================");
+    
+    // Load existing credentials
+    std::vector<WiFiCredential> credentials;
+    loadCredentials(credentials);
+    
+    // Check if SSID already exists (update password)
+    bool found = false;
+    for (size_t i = 0; i < credentials.size(); i++) {
+        if (credentials[i].ssid == ssid) {
+            credentials[i].password = password;
+            found = true;
+            ESP_LOGI(TAG, "Updating password for existing SSID: %s", ssid.c_str());
+            break;
+        }
+    }
+    
+    // Add new credential if not found
+    if (!found) {
+        if (credentials.size() >= MAX_STORED_NETWORKS) {
+            ESP_LOGW(TAG, "Maximum credentials reached, removing oldest");
+            credentials.erase(credentials.begin()); // Remove oldest (first)
+        }
+        credentials.push_back(WiFiCredential(ssid, password));
+        ESP_LOGI(TAG, "Adding new credentials for SSID: %s", ssid.c_str());
+    }
+    
+    // Clear all credentials first
+    clearCredentials();
+    
+    // Save all credentials
+    for (size_t i = 0; i < credentials.size(); i++) {
+        String ssidKey = getSSIDKey(i);
+        String passKey = getPasswordKey(i);
+        
+        preferences.putString(ssidKey.c_str(), credentials[i].ssid);
+        preferences.putString(passKey.c_str(), credentials[i].password);
+        
+        ESP_LOGV(TAG, "Saved credential %d: %s", i, credentials[i].ssid.c_str());
+    }
+    
+    // Save count
+    preferences.putInt(NVS_KEY_COUNT, credentials.size());
+    preferences.putBool(NVS_KEY_CONFIGURED, true);
+    
+    ESP_LOGI(TAG, "✓ Saved %d credential(s) to NVS", credentials.size());
+    return true;
+}
+
+bool Storage::loadCredentials(std::vector<WiFiCredential>& credentials) {
+    credentials.clear();
+    
+    int count = preferences.getInt(NVS_KEY_COUNT, 0);
+    ESP_LOGI(TAG, "Loading %d credential(s) from NVS", count);
+    
+    for (int i = 0; i < count && i < MAX_STORED_NETWORKS; i++) {
+        String ssidKey = getSSIDKey(i);
+        String passKey = getPasswordKey(i);
+        
+        String ssid = preferences.getString(ssidKey.c_str(), "");
+        String password = preferences.getString(passKey.c_str(), "");
+        
+        if (ssid.length() > 0) {
+            credentials.push_back(WiFiCredential(ssid, password));
+            ESP_LOGV(TAG, "Loaded credential %d: %s", i, ssid.c_str());
+        }
+    }
+    
+    ESP_LOGI(TAG, "Loaded %d credential(s)", credentials.size());
+    return credentials.size() > 0;
+}
+
+bool Storage::clearCredentials() {
+    ESP_LOGI(TAG, "Clearing all credentials from NVS");
+    
+    // Clear all keys
+    preferences.clear();
+    
+    ESP_LOGI(TAG, "Credentials cleared");
+    return true;
+}
+
+bool Storage::isConfigured() {
+    bool configured = preferences.getBool(NVS_KEY_CONFIGURED, false);
+    int count = preferences.getInt(NVS_KEY_COUNT, 0);
+    
+    bool result = configured && (count > 0);
+    ESP_LOGV(TAG, "isConfigured: %s (configured=%d, count=%d)", 
+             result ? "true" : "false", configured, count);
+    
+    return result;
+}
+
+int Storage::getCredentialCount() {
+    return preferences.getInt(NVS_KEY_COUNT, 0);
+}
+
+String Storage::getSSIDKey(int index) {
+    return String(NVS_KEY_SSID_PREFIX) + String(index);
+}
+
+String Storage::getPasswordKey(int index) {
+    return String(NVS_KEY_PASS_PREFIX) + String(index);
+}
+
