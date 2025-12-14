@@ -1,5 +1,6 @@
 #include "RunLoop.h"
 #include <esp_task_wdt.h>
+#include <esp_wifi.h>
 
 static const char *TAG = TAG_RUNLOOP;
 
@@ -18,7 +19,9 @@ RunLoop::RunLoop() :
     connectionFailed(false),
     consecutiveFailures(0),
     lastConnectionAttemptTime(0),
-    connectionRequested(false) {
+    connectionRequested(false),
+    errorStateEnteredTime(0),
+    errorRecoveryAttempts(0) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 }
 
@@ -168,11 +171,19 @@ void RunLoop::handleConnecting() {
                  connectionAttempts, WIFI_CONNECTION_ATTEMPTS, consecutiveFailures);
         
         if (connectionAttempts >= WIFI_CONNECTION_ATTEMPTS) {
-            ESP_LOGW(TAG, "Giving up after %d attempts. Entering AP mode.", connectionAttempts);
+            ESP_LOGW(TAG, "Giving up after %d attempts.", connectionAttempts);
             connectionFailed = true;
             connectionAttempts = 0;
             lastConnectionAttemptTime = millis();
-            transitionToState(AP_MODE);
+            
+            // Check if we should try recovery or go straight to AP mode
+            if (consecutiveFailures >= MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
+                ESP_LOGE(TAG, "Too many consecutive failures - entering AP mode");
+                transitionToState(AP_MODE);
+            } else {
+                ESP_LOGI(TAG, "Entering error recovery mode");
+                transitionToState(ERROR);
+            }
         } else {
             ESP_LOGI(TAG, "Will retry connection in 2 seconds...");
             // Wait 2 seconds before retry without blocking
@@ -288,25 +299,99 @@ void RunLoop::handleAPMode() {
 }
 
 void RunLoop::handleError() {
-    ESP_LOGE(TAG, "Error state - system halted");
-    
-    // Set LED to double blink (error)
-    static bool ledSet = false;
-    if (!ledSet) {
+    // First time entering error state?
+    static bool errorStateInitialized = false;
+    if (!errorStateInitialized) {
+        errorStateEnteredTime = millis();
+        errorRecoveryAttempts = 0;
+        errorStateInitialized = true;
         statusLED.setPattern(LED_DOUBLE_BLINK);
-        ledSet = true;
+        ESP_LOGI(TAG, "Entering error recovery mode");
     }
     
-    // Log error every 10 seconds (non-blocking)
-    static unsigned long lastErrorLog = 0;
-    if (millis() - lastErrorLog > 10000) {
-        ESP_LOGE(TAG, "System in error state. Please reset device.");
-        lastErrorLog = millis();
+    ESP_LOGD(TAG, "Error state - attempt %d", errorRecoveryAttempts);
+    
+    // Give up after MAX_RECOVERY_ATTEMPTS or ERROR_RECOVERY_TIMEOUT
+    if (errorRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS || 
+        (millis() - errorStateEnteredTime) > ERROR_RECOVERY_TIMEOUT) {
+        ESP_LOGE(TAG, "Max recovery attempts reached or timeout - entering safe mode (AP)");
+        transitionToState(AP_MODE);
+        errorStateInitialized = false;
+        return;
     }
     
-    // Keep watchdog happy and allow other tasks
+    // Wait between recovery attempts (exponential backoff)
+    static unsigned long lastRecoveryAttempt = 0;
+    unsigned long backoffDelay = RETRY_BACKOFF_BASE_MS * (1 << errorRecoveryAttempts);  // 5s, 10s, 20s, 40s, 80s
+    if (backoffDelay > 60000) backoffDelay = 60000;  // Cap at 60 seconds
+    
+    if (millis() - lastRecoveryAttempt < backoffDelay) {
+        esp_task_wdt_reset();
+        yield();
+        return;
+    }
+    
+    lastRecoveryAttempt = millis();
+    errorRecoveryAttempts++;
+    
+    // Determine and apply recovery strategy
+    RecoveryStrategy strategy = determineRecoveryStrategy();
+    ESP_LOGI(TAG, "Attempting recovery strategy: %d (attempt %d/%d)", 
+             strategy, errorRecoveryAttempts, MAX_RECOVERY_ATTEMPTS);
+    
+    if (attemptRecovery(strategy)) {
+        ESP_LOGI(TAG, "Recovery successful!");
+        errorStateInitialized = false;
+        transitionToState(LOADING_CREDENTIALS);
+    } else {
+        ESP_LOGW(TAG, "Recovery failed, will retry with backoff");
+    }
+    
     esp_task_wdt_reset();
     yield();
+}
+
+RunLoop::RecoveryStrategy RunLoop::determineRecoveryStrategy() {
+    // Analyze error history to pick best strategy
+    const ErrorStats& stats = wifiManager.getErrorStats();
+    
+    if (errorRecoveryAttempts == 0) {
+        return RETRY_CONNECTION;  // Simple retry first
+    } else if (lastWiFiError.code == (uint32_t)WiFiError::WEAK_SIGNAL) {
+        return REDUCE_WIFI_POWER;  // Try lower power for eero
+    } else if (lastWiFiError.code == (uint32_t)WiFiError::CONNECT_TIMEOUT) {
+        return FORCE_BG_MODE;  // Force 802.11b/g
+    } else if (errorRecoveryAttempts < 4) {
+        return RETRY_CONNECTION;  // Keep trying
+    } else {
+        return FALLBACK_TO_AP;  // Give up, let user fix it
+    }
+}
+
+bool RunLoop::attemptRecovery(RecoveryStrategy strategy) {
+    switch (strategy) {
+        case RETRY_CONNECTION:
+            ESP_LOGI(TAG, "Recovery: Retry connection");
+            return wifiManager.connectToStoredNetworks(storage);
+            
+        case REDUCE_WIFI_POWER:
+            ESP_LOGI(TAG, "Recovery: Reduce WiFi power");
+            WiFi.setTxPower(WIFI_POWER_8_5dBm);
+            return wifiManager.connectToStoredNetworks(storage);
+            
+        case FORCE_BG_MODE:
+            ESP_LOGI(TAG, "Recovery: Force 802.11b/g mode");
+            esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G);
+            return wifiManager.connectToStoredNetworks(storage);
+            
+        case FALLBACK_TO_AP:
+            ESP_LOGI(TAG, "Recovery: Fallback to AP mode");
+            transitionToState(AP_MODE);
+            return true;
+            
+        default:
+            return false;
+    }
 }
 
 String RunLoop::stateToString(State state) {

@@ -41,6 +41,20 @@ private:
     bool connectionFailed;
     int consecutiveFailures;
     unsigned long lastConnectionAttemptTime;
+    ErrorContext lastWiFiError;
+    unsigned long errorStateEnteredTime;
+    int errorRecoveryAttempts;
+    
+    enum RecoveryStrategy {
+        RETRY_CONNECTION,
+        REDUCE_WIFI_POWER,
+        FORCE_BG_MODE,
+        FALLBACK_TO_AP,
+        FACTORY_RESET
+    };
+    
+    RecoveryStrategy determineRecoveryStrategy();
+    bool attemptRecovery(RecoveryStrategy strategy);
     
     void transitionToState(State newState);
     void handleInitializing();

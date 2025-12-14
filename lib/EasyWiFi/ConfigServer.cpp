@@ -1,6 +1,7 @@
 #include "ConfigServer.h"
 #include "RunLoop.h"
 #include <esp_log.h>
+#include <ArduinoJson.h>
 
 static const char *TAG = TAG_CONFIG_SERVER;
 
@@ -43,6 +44,7 @@ void ConfigServer::setup() {
     server.on(ENDPOINT_API_CONNECT, HTTP_POST, std::bind(&ConfigServer::handleAPIConnect, this));
     server.on(ENDPOINT_API_CREDENTIALS, HTTP_DELETE, std::bind(&ConfigServer::handleAPICredentials, this));
     server.on(ENDPOINT_API_RESET, HTTP_GET, std::bind(&ConfigServer::handleAPIReset, this));
+    server.on("/api/health", HTTP_GET, std::bind(&ConfigServer::handleAPIHealth, this));
     
     // CORS preflight handler
     server.on(ENDPOINT_API_STATUS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
@@ -487,4 +489,40 @@ String ConfigServer::urlDecode(const String& encoded) {
     decoded.replace("%2F", "/");
     return decoded;
 }
+
+void ConfigServer::handleAPIHealth() {
+    ESP_LOGD(TAG, "GET /api/health");
+    enableCORS();
+    
+    const ErrorStats& wifiStats = wifiManager.getErrorStats();
+    const ErrorStats& storageStats = storage.getErrorStats();
+    
+    // Create JSON response using ArduinoJson
+    StaticJsonDocument<512> doc;
+    doc["healthy"] = wifiManager.isHealthy() && storage.isHealthy();
+    doc["uptime"] = millis() / 1000;
+    
+    JsonObject wifi = doc.createNestedObject("wifi");
+    wifi["totalErrors"] = wifiStats.totalErrors;
+    wifi["connectionErrors"] = wifiStats.connectionErrors;
+    wifi["recoveredErrors"] = wifiStats.recoveredErrors;
+    wifi["consecutiveErrors"] = wifiStats.consecutiveErrors;
+    wifi["lastErrorTime"] = wifiStats.lastErrorTime;
+    wifi["healthy"] = wifiManager.isHealthy();
+    
+    JsonObject storageObj = doc.createNestedObject("storage");
+    storageObj["totalErrors"] = storageStats.totalErrors;
+    storageObj["storageErrors"] = storageStats.storageErrors;
+    storageObj["consecutiveErrors"] = storageStats.consecutiveErrors;
+    storageObj["healthy"] = storage.isHealthy();
+    
+    JsonObject memory = doc.createNestedObject("memory");
+    memory["free"] = esp_get_free_heap_size();
+    memory["minimum"] = esp_get_minimum_free_heap_size();
+    
+    String response;
+    serializeJson(doc, response);
+    sendJSON(HTTP_STATUS_OK, response);
+}
+
 

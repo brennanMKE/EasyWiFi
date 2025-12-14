@@ -112,5 +112,13 @@ inline int getSignalBars(int rssi) {
     return 0;
 }
 
+// Error Handling Configuration
+#define ERROR_RECOVERY_ENABLED true        // Enable automatic error recovery
+#define MAX_RECOVERY_ATTEMPTS 5            // Max recovery attempts before giving up
+#define ERROR_RECOVERY_TIMEOUT 300000      // Max time in error state (5 minutes)
+#define RETRY_BACKOFF_BASE_MS 5000         // Base delay for exponential backoff
+#define MAX_CONSECUTIVE_ERRORS_BEFORE_AP 3 // Consecutive errors before forcing AP mode
+#define ERROR_LOG_RATE_LIMIT_MS 60000      // Rate limit repeated error logs
+
 #endif // MACROS_H
 

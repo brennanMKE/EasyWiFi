@@ -3,26 +3,61 @@
 
 static const char *TAG = TAG_STORAGE;
 
-Storage::Storage() {
+Storage::Storage() : errorHandler(TAG_STORAGE) {
     // Constructor
 }
 
-bool Storage::begin() {
+StorageError Storage::beginEx(ErrorContext* outError) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     
     bool success = preferences.begin(NVS_NAMESPACE, false); // false = read/write mode
     if (success) {
         ESP_LOGI(TAG, "NVS storage initialized");
+        errorHandler.recordRecovery();
+        return StorageError::SUCCESS;
     } else {
         ESP_LOGE(TAG, "Failed to initialize NVS storage");
+        errorHandler.recordError((uint32_t)StorageError::NVS_INIT_FAILED, "NVS initialization failed");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::NVS_INIT_FAILED;
     }
-    return success;
 }
 
-bool Storage::saveCredentials(const String& ssid, const String& password) {
+bool Storage::begin() {
+    StorageError error = beginEx(nullptr);
+    return error == StorageError::SUCCESS;
+}
+
+StorageError Storage::saveCredentialsEx(const String& ssid, const String& password, ErrorContext* outError) {
+    // Validate SSID
     if (ssid.length() == 0) {
         ESP_LOGE(TAG, "Cannot save credentials: SSID is empty");
-        return false;
+        errorHandler.recordError((uint32_t)StorageError::INVALID_SSID, "SSID is empty");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::INVALID_SSID;
+    }
+    
+    if (ssid.length() > 32) {
+        ESP_LOGE(TAG, "Cannot save credentials: SSID too long (%d chars, max 32)", ssid.length());
+        errorHandler.recordError((uint32_t)StorageError::INVALID_SSID, "SSID too long");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::INVALID_SSID;
+    }
+    
+    // Validate password
+    if (password.length() > 63) {
+        ESP_LOGE(TAG, "Cannot save credentials: Password too long (%d chars, max 63)", password.length());
+        errorHandler.recordError((uint32_t)StorageError::INVALID_PASSWORD, "Password too long");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::INVALID_PASSWORD;
     }
     
     ESP_LOGI(TAG, "========================================");
@@ -86,14 +121,28 @@ bool Storage::saveCredentials(const String& ssid, const String& password) {
     preferences.putBool(NVS_KEY_CONFIGURED, true);
     
     ESP_LOGI(TAG, "✓ Saved %d credential(s) to NVS", credentials.size());
-    return true;
+    errorHandler.recordRecovery();
+    return StorageError::SUCCESS;
 }
 
-bool Storage::loadCredentials(std::vector<WiFiCredential>& credentials) {
+bool Storage::saveCredentials(const String& ssid, const String& password) {
+    StorageError error = saveCredentialsEx(ssid, password, nullptr);
+    return error == StorageError::SUCCESS;
+}
+
+StorageError Storage::loadCredentialsEx(std::vector<WiFiCredential>& credentials, ErrorContext* outError) {
     credentials.clear();
     
     int count = preferences.getInt(NVS_KEY_COUNT, 0);
     ESP_LOGI(TAG, "Loading %d credential(s) from NVS", count);
+    
+    if (count == 0) {
+        errorHandler.recordError((uint32_t)StorageError::CREDENTIALS_NOT_FOUND, "No credentials found");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::CREDENTIALS_NOT_FOUND;
+    }
     
     for (int i = 0; i < count && i < MAX_STORED_NETWORKS; i++) {
         String ssidKey = getSSIDKey(i);
@@ -109,7 +158,22 @@ bool Storage::loadCredentials(std::vector<WiFiCredential>& credentials) {
     }
     
     ESP_LOGI(TAG, "Loaded %d credential(s)", credentials.size());
-    return credentials.size() > 0;
+    
+    if (credentials.size() > 0) {
+        errorHandler.recordRecovery();
+        return StorageError::SUCCESS;
+    } else {
+        errorHandler.recordError((uint32_t)StorageError::CREDENTIALS_NOT_FOUND, "No valid credentials found");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return StorageError::CREDENTIALS_NOT_FOUND;
+    }
+}
+
+bool Storage::loadCredentials(std::vector<WiFiCredential>& credentials) {
+    StorageError error = loadCredentialsEx(credentials, nullptr);
+    return error == StorageError::SUCCESS;
 }
 
 bool Storage::clearCredentials() {

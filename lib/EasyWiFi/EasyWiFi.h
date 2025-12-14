@@ -9,6 +9,7 @@
 #include "Storage.h"
 #include "WebPages.h"
 #include "StatusLED.h"
+#include "ErrorHandler.h"
 #include "Macros.h"
 #else
 #error "This code is only intended to be compiled for ESP32 platforms."

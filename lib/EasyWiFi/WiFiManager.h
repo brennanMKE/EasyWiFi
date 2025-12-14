@@ -9,6 +9,7 @@
 #include <DNSServer.h>
 #include <vector>
 #include "Storage.h"
+#include "ErrorHandler.h"
 #include "Macros.h"
 #else
 #error "This code is only intended to be compiled for ESP32 platforms."
@@ -35,11 +36,18 @@ public:
     // Connect to stored networks from Storage
     bool connectToStoredNetworks(Storage& storage);
     
+    WiFiError connectToStoredNetworksEx(Storage& storage, ErrorContext* outError = nullptr);
+    WiFiError startAccessPointEx(ErrorContext* outError = nullptr);
+    
     // Start Access Point mode
     bool startAccessPoint();
     
     // Stop Access Point mode
     void stopAccessPoint();
+    
+    // Error monitoring
+    const ErrorStats& getErrorStats() const { return errorHandler.getStats(); }
+    bool isHealthy() const { return errorHandler.isHealthy(); }
     
     // Scan for available WiFi networks
     bool scanNetworks(std::vector<WiFiNetwork>& results);
@@ -82,6 +90,7 @@ private:
     bool mdnsActive;
     DNSServer* dnsServer;
     bool captivePortalActive;
+    ErrorHandler errorHandler;
     
     // Get encryption type as human-readable string
     const char* getEncryptionTypeName(wifi_auth_mode_t encryptionType);

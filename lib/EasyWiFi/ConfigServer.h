@@ -50,6 +50,7 @@ private:
     void handleAPIConnect();
     void handleAPICredentials();
     void handleAPIReset();
+    void handleAPIHealth();
     
     // Utility handlers
     void handleNotFound();

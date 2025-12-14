@@ -5,14 +5,22 @@
 
 static const char *TAG = TAG_WIFI_MANAGER;
 
-WiFiManager::WiFiManager() : apActive(false), mdnsActive(false), dnsServer(nullptr), captivePortalActive(false) {
+WiFiManager::WiFiManager() : apActive(false), mdnsActive(false), dnsServer(nullptr), captivePortalActive(false), errorHandler(TAG_WIFI_MANAGER) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
+    
+    // Configure retry policy for WiFi operations
+    RetryPolicy policy;
+    policy.maxRetries = 3;
+    policy.initialDelayMs = 2000;
+    policy.backoffMultiplier = 1.5f;
+    policy.maxDelayMs = 15000;
+    errorHandler.setRetryPolicy(policy);
 }
 
-bool WiFiManager::connectToStoredNetworks(Storage& storage) {
+WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext* outError) {
     if (isConnected()) {
         ESP_LOGI(TAG, "Already connected to WiFi");
-        return true;
+        return WiFiError::SUCCESS;
     }
     
     // Log WiFi state before connection attempt
@@ -23,7 +31,11 @@ bool WiFiManager::connectToStoredNetworks(Storage& storage) {
     std::vector<WiFiCredential> credentials;
     if (!storage.loadCredentials(credentials) || credentials.empty()) {
         ESP_LOGI(TAG, "No stored credentials found");
-        return false;
+        errorHandler.recordError((uint32_t)WiFiError::SSID_NOT_FOUND, "No stored credentials");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return WiFiError::SSID_NOT_FOUND;
     }
     
     ESP_LOGI(TAG, "Attempting to connect to %d stored network(s)", credentials.size());
@@ -114,25 +126,44 @@ bool WiFiManager::connectToStoredNetworks(Storage& storage) {
                  WiFi.RSSI() > -50 ? "Excellent" : 
                  WiFi.RSSI() > -60 ? "Good" : 
                  WiFi.RSSI() > -70 ? "Fair" : "Weak");
-        return true;
+        errorHandler.recordRecovery();
+        return WiFiError::SUCCESS;
     } else {
+        WiFiError error = WiFiError::CONNECT_FAILED;
+        
+        // Determine specific error type
+        if (status == WL_NO_SSID_AVAIL) {
+            error = WiFiError::SSID_NOT_FOUND;
+        } else if (status == WL_CONNECT_FAILED) {
+            error = WiFiError::AUTH_FAILED;
+        } else if (elapsedTime >= WIFI_CONNECTION_TIMEOUT - 1000) {
+            error = WiFiError::CONNECT_TIMEOUT;
+        }
+        
         ESP_LOGW(TAG, "✗ Connection attempt failed");
         ESP_LOGW(TAG, "  WiFi status: %d (%s)", status, getWiFiStatusName((wl_status_t)status));
         ESP_LOGW(TAG, "  Time elapsed: %lu ms (timeout was %d ms)", elapsedTime, WIFI_CONNECTION_TIMEOUT);
+        ESP_LOGW(TAG, "  Error: %s", errorHandler.getErrorMessage(error));
         
-        // Check if we timed out
-        if (elapsedTime >= WIFI_CONNECTION_TIMEOUT - 1000) {
-            ESP_LOGW(TAG, "  Connection timed out - network may be unreachable or too slow to respond");
+        errorHandler.recordError((uint32_t)error, errorHandler.getErrorMessage(error));
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
         }
         
-        return false;
+        return error;
     }
 }
 
-bool WiFiManager::startAccessPoint() {
+// Backward compatible wrapper
+bool WiFiManager::connectToStoredNetworks(Storage& storage) {
+    WiFiError error = connectToStoredNetworksEx(storage, nullptr);
+    return error == WiFiError::SUCCESS;
+}
+
+WiFiError WiFiManager::startAccessPointEx(ErrorContext* outError) {
     if (apActive) {
         ESP_LOGI(TAG, "Access Point already active");
-        return true;
+        return WiFiError::SUCCESS;
     }
     
     // Generate unique AP SSID
@@ -164,7 +195,11 @@ bool WiFiManager::startAccessPoint() {
     
     if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
         ESP_LOGE(TAG, "Failed to configure AP IP");
-        return false;
+        errorHandler.recordError((uint32_t)WiFiError::AP_START_FAILED, "Failed to configure AP IP");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return WiFiError::AP_START_FAILED;
     }
     
     // Start AP
@@ -177,17 +212,28 @@ bool WiFiManager::startAccessPoint() {
     
     if (!success) {
         ESP_LOGE(TAG, "Failed to start Access Point");
-        return false;
+        errorHandler.recordError((uint32_t)WiFiError::AP_START_FAILED, "Failed to start Access Point");
+        if (outError) {
+            *outError = errorHandler.getStats().lastError;
+        }
+        return WiFiError::AP_START_FAILED;
     }
     
     apActive = true;
+    errorHandler.recordRecovery();
     
     ESP_LOGI(TAG, "Access Point started successfully");
     ESP_LOGI(TAG, "SSID: %s", apSSID.c_str());
     ESP_LOGI(TAG, "IP: %s", WiFi.softAPIP().toString().c_str());
     ESP_LOGI(TAG, "Password: %s", apPassword.length() > 0 ? "Protected" : "Open");
     
-    return true;
+    return WiFiError::SUCCESS;
+}
+
+// Backward compatible wrapper
+bool WiFiManager::startAccessPoint() {
+    WiFiError error = startAccessPointEx(nullptr);
+    return error == WiFiError::SUCCESS;
 }
 
 void WiFiManager::stopAccessPoint() {
@@ -541,4 +587,5 @@ void WiFiManager::logWiFiDiagnostics() {
     }
     ESP_LOGI(TAG, "======================================");
 }
+
 
