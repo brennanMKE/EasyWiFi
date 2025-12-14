@@ -122,5 +122,7 @@ inline int getSignalBars(int rssi) {
 #define RETRY_BACKOFF_BASE_MS 5000         // Base delay for exponential backoff
 #define MAX_CONSECUTIVE_ERRORS_BEFORE_AP 3 // Consecutive errors before forcing AP mode
 #define ERROR_LOG_RATE_LIMIT_MS 60000      // Rate limit repeated error logs
+#define ERROR_HANDLE_RATE_LIMIT_MS 1000    // Minimum time between error handling attempts (prevents tight loops)
+#define FORCE_AP_ON_NO_NETWORKS true       // Auto-enter AP mode when no networks available
 
 #endif // MACROS_H

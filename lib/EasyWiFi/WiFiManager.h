@@ -4,7 +4,9 @@
 #if defined(ESP32)
 #include "Arduino.h"
 #include <WiFi.h>
-#include <WiFiMulti.h>
+// NOTE: WiFiMulti.h is intentionally NOT included!
+// See Fix.md: WiFiMulti interferes with ESP32-C3 + eero compatibility settings.
+// We use direct WiFi.begin() instead to preserve power/protocol settings.
 #include <ESPmDNS.h>
 #include <DNSServer.h>
 #include <vector>
@@ -52,9 +54,6 @@ public:
     // Scan for available WiFi networks
     bool scanNetworks(std::vector<WiFiNetwork>& results);
     
-    // Add credentials to WiFiMulti (for immediate connection attempt)
-    void addCredentials(const String& ssid, const String& password);
-    
     // Get current WiFi status as string
     String getStatus();
     
@@ -82,7 +81,10 @@ public:
     bool isCaptivePortalActive();
 
 private:
-    WiFiMulti wifiMulti;
+    // ⚠️ WARNING: DO NOT add WiFiMulti member variable!
+    // WiFiMulti interferes with eero compatibility settings (see Fix.md)
+    // Always use direct WiFi.begin() to preserve power/protocol settings
+    
     String apSSID;
     String apPassword;
     bool apActive;

@@ -560,12 +560,67 @@ void ConfigServer::handleAPICredentialsDelete() {
         if (storage.deleteCredential(ssid)) {
             ESP_LOGI(TAG, "Deleted credential: %s", ssid.c_str());
             
+            // If we just deleted the currently connected network, disconnect and reconnect
+            if (ssid == WiFi.SSID()) {
+                ESP_LOGI(TAG, "Deleted the currently connected network - triggering reconnection");
+                WiFi.disconnect();
+                
+                // Request RunLoop to attempt connection with remaining credentials
+                if (runLoop != nullptr) {
+                    runLoop->requestConnectionAttempt();
+                }
+            }
+            
             // Redirect back to credentials page
             server.sendHeader("Location", "/credentials", true);
             server.send(HTTP_STATUS_REDIRECT, "text/plain", "");
         } else {
             sendHTML(HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
         }
+    } else if (action == "join") {
+        // Verify the credential exists
+        std::vector<String> ssidList;
+        storage.getCredentialsList(ssidList);
+        
+        bool found = false;
+        for (const auto& storedSSID : ssidList) {
+            if (storedSSID == ssid) {
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            sendHTML(HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
+            return;
+        }
+        
+        // Don't try to join if already connected
+        if (ssid == WiFi.SSID() && WiFi.status() == WL_CONNECTED) {
+            sendHTML(HTTP_STATUS_BAD_REQUEST, 
+                    webPages.generateErrorPage("Already connected to " + ssid));
+            return;
+        }
+        
+        ESP_LOGI(TAG, "Manual join requested for: %s", ssid.c_str());
+        
+        // Move this network to priority 1 for immediate connection
+        storage.moveCredentialToFirst(ssid);
+        
+        // Disconnect from current network
+        if (WiFi.status() == WL_CONNECTED) {
+            ESP_LOGI(TAG, "Disconnecting from current network: %s", WiFi.SSID().c_str());
+            WiFi.disconnect();
+        }
+        
+        // Request RunLoop to attempt connection
+        if (runLoop != nullptr) {
+            runLoop->requestConnectionAttempt();
+        }
+        
+        // Redirect to status page to show connection progress
+        server.sendHeader("Location", ENDPOINT_STATUS, true);
+        server.send(HTTP_STATUS_REDIRECT, "text/plain", "");
     } else {
         sendHTML(HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Invalid action"));
     }

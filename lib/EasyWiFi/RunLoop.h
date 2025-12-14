@@ -44,6 +44,7 @@ private:
     ErrorContext lastWiFiError;
     unsigned long errorStateEnteredTime;
     int errorRecoveryAttempts;
+    unsigned long lastErrorHandleTime;  // For rate limiting error handling to prevent tight loops
     
     enum RecoveryStrategy {
         RETRY_CONNECTION,

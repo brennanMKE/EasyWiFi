@@ -21,7 +21,8 @@ RunLoop::RunLoop() :
     lastConnectionAttemptTime(0),
     connectionRequested(false),
     errorStateEnteredTime(0),
-    errorRecoveryAttempts(0) {
+    errorRecoveryAttempts(0),
+    lastErrorHandleTime(0) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
 }
 
@@ -150,8 +151,15 @@ void RunLoop::handleConnecting() {
     statusLED.setPattern(LED_FAST_BLINK);
     connectionFailed = false;
     
-    // Try to connect (this is blocking but we feed watchdog inside WiFiManager)
-    bool connected = wifiManager.connectToStoredNetworks(storage);
+    // Try to connect and capture error context for better error handling
+    ErrorContext errorContext;
+    WiFiError result = wifiManager.connectToStoredNetworksEx(storage, &errorContext);
+    bool connected = (result == WiFiError::SUCCESS);
+    
+    // Store error context for use in error recovery
+    if (!connected) {
+        lastWiFiError = errorContext;
+    }
     
     // Feed watchdog after connection attempt
     esp_task_wdt_reset();
@@ -299,6 +307,14 @@ void RunLoop::handleAPMode() {
 }
 
 void RunLoop::handleError() {
+    // Rate limiting to prevent tight loops - CRITICAL FIX
+    unsigned long now = millis();
+    if (now - lastErrorHandleTime < ERROR_HANDLE_RATE_LIMIT_MS) {
+        esp_task_wdt_reset();
+        yield();
+        return;
+    }
+    
     // First time entering error state?
     static bool errorStateInitialized = false;
     if (!errorStateInitialized) {
@@ -309,7 +325,26 @@ void RunLoop::handleError() {
         ESP_LOGI(TAG, "Entering error recovery mode");
     }
     
-    ESP_LOGD(TAG, "Error state - attempt %d", errorRecoveryAttempts);
+    // Only log state changes, not every iteration (prevents log spam)
+    static int lastLoggedAttempt = -1;
+    if (lastLoggedAttempt != errorRecoveryAttempts) {
+        ESP_LOGD(TAG, "Error state - attempt %d", errorRecoveryAttempts);
+        lastLoggedAttempt = errorRecoveryAttempts;
+    }
+    
+    // Check for unrecoverable error: All networks not found (NO_AP_FOUND)
+    // If FORCE_AP_ON_NO_NETWORKS is enabled and this is SSID_NOT_FOUND, transition to AP mode
+    if (FORCE_AP_ON_NO_NETWORKS && 
+        lastWiFiError.code == (uint32_t)WiFiError::SSID_NOT_FOUND) {
+        if (errorRecoveryAttempts >= MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
+            ESP_LOGW(TAG, "All configured networks not found (NO_AP_FOUND) - transitioning to AP mode");
+            ESP_LOGI(TAG, "User can connect to AP to reconfigure networks");
+            transitionToState(AP_MODE);
+            errorStateInitialized = false;
+            lastErrorHandleTime = now;
+            return;
+        }
+    }
     
     // Give up after MAX_RECOVERY_ATTEMPTS or ERROR_RECOVERY_TIMEOUT
     if (errorRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS || 
@@ -317,6 +352,7 @@ void RunLoop::handleError() {
         ESP_LOGE(TAG, "Max recovery attempts reached or timeout - entering safe mode (AP)");
         transitionToState(AP_MODE);
         errorStateInitialized = false;
+        lastErrorHandleTime = now;
         return;
     }
     
@@ -332,6 +368,7 @@ void RunLoop::handleError() {
     }
     
     lastRecoveryAttempt = millis();
+    lastErrorHandleTime = now;
     errorRecoveryAttempts++;
     
     // Determine and apply recovery strategy
@@ -342,6 +379,7 @@ void RunLoop::handleError() {
     if (attemptRecovery(strategy)) {
         ESP_LOGI(TAG, "Recovery successful!");
         errorStateInitialized = false;
+        lastLoggedAttempt = -1;  // Reset log throttle
         transitionToState(LOADING_CREDENTIALS);
     } else {
         ESP_LOGW(TAG, "Recovery failed, will retry with backoff");

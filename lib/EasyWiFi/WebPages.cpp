@@ -408,7 +408,15 @@ String WebPages::generateCredentialsPage(Storage& storage, const String& current
             html += "</small>";
             html += "</div>";
             
-            html += "<div class='network-action'>";
+            html += "<div class='network-action' style='display:flex;gap:8px;'>";
+            
+            // Show Join button if not currently connected
+            if (!isConnected) {
+                html += "<a href='/api/credentials?ssid=" + ssid + "&action=join' ";
+                html += "class='button small primary' ";
+                html += "onclick='return confirm(\"Switch to \\\"" + ssid + "\\\"?\")'>Join</a>";
+            }
+            
             // Allow deletion unless it's the only connected network
             if (!isConnected || ssidList.size() > 1) {
                 html += "<a href='/api/credentials?ssid=" + ssid + "&action=delete' ";

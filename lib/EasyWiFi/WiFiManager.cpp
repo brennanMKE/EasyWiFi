@@ -43,7 +43,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
     // === PRE-SCAN: Check which networks are in range ===
     std::vector<bool> networkInRange(credentials.size(), true);  // Assume all in range by default
     
-    if (WIFI_PRE_SCAN_ENABLED && credentials.size() > 1) {
+    if (WIFI_PRE_SCAN_ENABLED) {
         ESP_LOGI(TAG, "========================================");
         ESP_LOGI(TAG, "Pre-Scan: Checking which networks are in range");
         ESP_LOGI(TAG, "========================================");
@@ -84,6 +84,29 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             
             // Clean up scan results
             WiFi.scanDelete();
+            
+            // Check if ALL networks are out of range - if so, fail immediately
+            bool anyNetworkInRange = false;
+            for (size_t i = 0; i < networkInRange.size(); i++) {
+                if (networkInRange[i]) {
+                    anyNetworkInRange = true;
+                    break;
+                }
+            }
+            
+            if (!anyNetworkInRange) {
+                ESP_LOGW(TAG, "========================================");
+                ESP_LOGW(TAG, "Pre-Scan Result: ALL stored networks are out of range!");
+                ESP_LOGW(TAG, "Skipping connection attempts - no networks available");
+                ESP_LOGW(TAG, "========================================");
+                
+                WiFiError error = WiFiError::SSID_NOT_FOUND;
+                errorHandler.recordError((uint32_t)error, "All networks out of range (pre-scan)");
+                if (outError) {
+                    *outError = errorHandler.getStats().lastError;
+                }
+                return error;
+            }
         } else {
             ESP_LOGW(TAG, "Pre-scan found no networks or failed - will try all stored networks");
         }
@@ -109,7 +132,21 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
         ESP_LOGI(TAG, "    Password hint: %s", maskedPass.c_str());
     }
     
-    // Configure WiFi for better eero compatibility (BEFORE any connection attempt)
+    // ========================================================================
+    // ⚠️ CRITICAL: ESP32-C3 + eero Compatibility Settings
+    // ========================================================================
+    // These settings are REQUIRED for ESP32-C3 to connect to eero mesh networks.
+    // DO NOT remove or modify these settings! See Fix.md for full explanation.
+    //
+    // Key Requirements:
+    // 1. Lower transmit power (8.5dBm) - prevents receiver overload
+    // 2. Disable 802.11n (use only b/g) - reduces mesh interference
+    // 3. Use direct WiFi.begin() - NEVER use WiFiMulti (it overrides these)
+    //
+    // These settings must be applied ONCE before ANY connection attempts,
+    // and must be preserved across ALL networks.
+    // ========================================================================
+    
     ESP_LOGI(TAG, "Configuring WiFi radio settings for optimal eero compatibility...");
     
     // Initialize WiFi in STA mode first (required before setting power/protocol)
@@ -133,6 +170,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
     }
     
     ESP_LOGI(TAG, "  ✓ eero compatibility settings applied");
+    ESP_LOGI(TAG, "  ⚠️  These settings will be used for ALL networks");
     
     // Declare variables at function scope for use across phases
     unsigned long startTime = 0;
@@ -167,6 +205,18 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
                 status = WiFi.status();
                 if (status == WL_CONNECTED) {
+                    break;
+                }
+                
+                // Early exit if network not found - don't wait full timeout
+                if (status == WL_NO_SSID_AVAIL) {
+                    ESP_LOGW(TAG, "Network not found (NO_AP_FOUND) - exiting early");
+                    break;
+                }
+                
+                // Early exit on immediate connection failure
+                if (status == WL_CONNECT_FAILED) {
+                    ESP_LOGW(TAG, "Connection failed immediately - exiting early");
                     break;
                 }
                 
@@ -206,9 +256,9 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
         }
     }  // End Phase 1 block
     
-    // === PHASE 2: Try remaining networks with WiFiMulti (standard settings) ===
+    // === Try remaining networks (using same eero-compatible settings) ===
     if (credentials.size() > 1) {
-        // Count how many networks are in range for Phase 2
+        // Count how many networks are in range
         int inRangeCount = 0;
         for (size_t i = 1; i < credentials.size(); i++) {
             if (networkInRange[i]) inRangeCount++;
@@ -216,7 +266,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
         
         if (inRangeCount == 0) {
             ESP_LOGW(TAG, "========================================");
-            ESP_LOGW(TAG, "Phase 2: SKIPPED - No remaining networks in range");
+            ESP_LOGW(TAG, "No remaining networks in range");
             ESP_LOGW(TAG, "All %d stored network(s) are out of range", credentials.size());
             ESP_LOGW(TAG, "========================================");
             
@@ -227,10 +277,6 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             }
             return error;
         }
-        ESP_LOGI(TAG, "========================================");
-        ESP_LOGI(TAG, "Phase 2: Trying remaining %d in-range network(s) with standard settings", inRangeCount);
-        ESP_LOGI(TAG, "  Settings: Full power (19.5dBm), 802.11b/g/n");
-        ESP_LOGI(TAG, "========================================");
         
         // Disconnect from failed attempt
         WiFi.disconnect();
@@ -240,72 +286,95 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             yield();
         }
         
-        // Reset to standard WiFi settings for better range/speed
-        WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Full power
-        esp_err_t result = esp_wifi_set_protocol(WIFI_IF_STA, 
-            WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-        if (result == ESP_OK) {
-            ESP_LOGI(TAG, "  ✓ Set WiFi protocol to 802.11b/g/n (full protocol support)");
-        }
-        ESP_LOGI(TAG, "  ✓ Set transmit power to 19.5dBm (full power)");
+        // Try each remaining network with direct WiFi.begin() (KEEP eero settings!)
+        // ⚠️ DO NOT change power or protocol here - eero settings must persist!
+        ESP_LOGI(TAG, "========================================");
+        ESP_LOGI(TAG, "Trying remaining %d in-range network(s) with eero settings", inRangeCount);
+        ESP_LOGI(TAG, "  Settings: Low power (8.5dBm), 802.11b/g (SAME as network 1)");
+        ESP_LOGI(TAG, "  ⚠️  Using direct WiFi.begin() - NOT WiFiMulti!");
+        ESP_LOGI(TAG, "========================================");
         
-        // Add remaining networks to WiFiMulti (only those in range)
-        // Note: WiFiMulti doesn't have a public clear method, but it will work fine
-        int addedCount = 0;
         for (size_t i = 1; i < credentials.size(); i++) {
-            if (networkInRange[i]) {
-                addedCount++;
-                ESP_LOGI(TAG, "  Adding network %d/%d: %s [In Range]", 
+            if (!networkInRange[i]) {
+                ESP_LOGI(TAG, "Skipping network %d/%d: %s [Out of Range]", 
                          i + 1, credentials.size(), credentials[i].ssid.c_str());
-                wifiMulti.addAP(credentials[i].ssid.c_str(), credentials[i].password.c_str());
-            } else {
-                ESP_LOGI(TAG, "  Skipping network %d/%d: %s [Out of Range]", 
-                         i + 1, credentials.size(), credentials[i].ssid.c_str());
+                continue;
             }
-        }
-        
-        if (addedCount == 0) {
-            ESP_LOGW(TAG, "No in-range networks to add to Phase 2");
-        }
-        
-        // Try to connect with WiFiMulti
-        ESP_LOGI(TAG, "Starting Phase 2 connection attempt...");
-        startTime = millis();
-        status = WL_IDLE_STATUS;
-        
-        while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
-            status = (wl_status_t)wifiMulti.run(1000);  // Check every second
+            
+            ESP_LOGI(TAG, "Trying network %d/%d: %s [In Range]", 
+                     i + 1, credentials.size(), credentials[i].ssid.c_str());
+            
+            // Use direct WiFi.begin() - DO NOT use WiFiMulti!
+            startTime = millis();
+            WiFi.begin(credentials[i].ssid.c_str(), credentials[i].password.c_str());
+            
+            // Poll WiFi.status() without blocking
+            status = WL_IDLE_STATUS;
+            unsigned long lastCheck = millis();
+            while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
+                status = WiFi.status();
+                if (status == WL_CONNECTED) {
+                    break;
+                }
+                
+                // Early exit if network not found
+                if (status == WL_NO_SSID_AVAIL) {
+                    ESP_LOGW(TAG, "Network not found (NO_AP_FOUND) - exiting early");
+                    break;
+                }
+                
+                // Early exit on immediate connection failure
+                if (status == WL_CONNECT_FAILED) {
+                    ESP_LOGW(TAG, "Connection failed immediately - exiting early");
+                    break;
+                }
+                
+                // Reset watchdog every 100ms
+                unsigned long now = millis();
+                if (now - lastCheck >= 100) {
+                    esp_task_wdt_reset();
+                    lastCheck = now;
+                }
+                yield();
+            }
+            
+            elapsedTime = millis() - startTime;
+            
             if (status == WL_CONNECTED) {
-                break;
+                // Success!
+                ESP_LOGI(TAG, "========== Post-Connection Diagnostics ==========");
+                logWiFiDiagnostics();
+                ESP_LOGI(TAG, "✓ SUCCESS: Connected to %s (network %d/%d) in %lu ms", 
+                         WiFi.SSID().c_str(), i + 1, credentials.size(), elapsedTime);
+                ESP_LOGI(TAG, "  BSSID: %s", WiFi.BSSIDstr().c_str());
+                ESP_LOGI(TAG, "  Channel: %d", WiFi.channel());
+                ESP_LOGI(TAG, "  IP address: %s", WiFi.localIP().toString().c_str());
+                ESP_LOGI(TAG, "  Signal strength: %d dBm", WiFi.RSSI());
+                errorHandler.recordRecovery();
+                
+                // Move this successful network to first position for next boot
+                ESP_LOGI(TAG, "Moving '%s' to priority 1 for faster connection next time", 
+                         WiFi.SSID().c_str());
+                storage.moveCredentialToFirst(WiFi.SSID());
+                
+                return WiFiError::SUCCESS;
             }
-            esp_task_wdt_reset();
-            yield();
+            
+            // This network failed, try next one
+            ESP_LOGW(TAG, "✗ Network %d/%d (%s) FAILED: %s (after %lu ms)", 
+                     i + 1, credentials.size(), credentials[i].ssid.c_str(),
+                     getWiFiStatusName((wl_status_t)status), elapsedTime);
+            
+            // Disconnect before trying next network
+            WiFi.disconnect();
+            disconnectStart = millis();
+            while (millis() - disconnectStart < 500) {
+                esp_task_wdt_reset();
+                yield();
+            }
         }
         
-        elapsedTime = millis() - startTime;
-        ESP_LOGI(TAG, "Phase 2 completed in %lu ms", elapsedTime);
-        
-        if (status == WL_CONNECTED) {
-            // Phase 2 succeeded!
-            ESP_LOGI(TAG, "========== Post-Connection Diagnostics ==========");
-            logWiFiDiagnostics();
-            ESP_LOGI(TAG, "✓ Phase 2 SUCCESS: Connected to %s (from networks 2-%d)", 
-                     WiFi.SSID().c_str(), credentials.size());
-            ESP_LOGI(TAG, "  BSSID: %s", WiFi.BSSIDstr().c_str());
-            ESP_LOGI(TAG, "  Channel: %d", WiFi.channel());
-            ESP_LOGI(TAG, "  IP address: %s", WiFi.localIP().toString().c_str());
-            ESP_LOGI(TAG, "  Signal strength: %d dBm", WiFi.RSSI());
-            errorHandler.recordRecovery();
-            
-            // Move this successful network to first position for next boot
-            ESP_LOGI(TAG, "Moving '%s' to priority 1 for faster connection next time", 
-                     WiFi.SSID().c_str());
-            storage.moveCredentialToFirst(WiFi.SSID());
-            
-            return WiFiError::SUCCESS;
-        }
-        
-        ESP_LOGW(TAG, "✗ Phase 2 FAILED: All %d networks failed", credentials.size());
+        ESP_LOGW(TAG, "✗ ALL %d networks failed", credentials.size());
     }
     
     // All networks failed
@@ -485,10 +554,11 @@ bool WiFiManager::scanNetworks(std::vector<WiFiNetwork>& results) {
     return true;
 }
 
-void WiFiManager::addCredentials(const String& ssid, const String& password) {
-    wifiMulti.addAP(ssid.c_str(), password.c_str());
-    ESP_LOGI(TAG, "Added credentials for immediate connection: %s", ssid.c_str());
-}
+// ⚠️ REMOVED: addCredentials() method (used WiFiMulti - see Fix.md)
+// This method has been removed because it used WiFiMulti, which interferes 
+// with ESP32-C3 + eero compatibility settings.
+// To add credentials: Use Storage::saveCredentials() instead
+// To connect: Use connectToStoredNetworksEx() which uses WiFi.begin()
 
 String WiFiManager::getStatus() {
     if (apActive) {
