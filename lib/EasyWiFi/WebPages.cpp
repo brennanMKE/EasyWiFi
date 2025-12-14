@@ -15,7 +15,7 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
     
     if (wifiManager.isConnected()) {
         html += "<div class='status success'>";
-        html += "<div style='font-size:32px;margin-bottom:8px;'>✓</div>";
+        html += "<span style='font-size:24px;margin-right:8px;'>✓</span>";
         html += "<strong>Connected</strong>";
         html += "</div>";
         
@@ -31,21 +31,19 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         html += "</div>";
         
         html += "<div class='button-group'>";
-        html += "<a href='/scan' class='button'>Change Network</a>";
-        html += "<a href='/api/status' class='button'>API Status</a>";
-        html += "</div>";
-        
+        html += "<a href='/scan' class='button small'>Change Network</a>";
+        html += "<a href='/api/status' class='button small'>API Status</a>";
         if (storage.isConfigured()) {
-            html += "<div class='button-group'>";
-            html += "<a href='/reset' class='button danger' onclick='return confirm(\"⚠️ Clear all WiFi credentials and reboot?\\n\\nThis will delete all stored networks and restart in AP mode.\")'>Factory Reset</a>";
-            html += "</div>";
+            html += "<a href='/reset' class='button small danger' onclick='return confirm(\"⚠️ Clear all WiFi credentials and reboot?\\n\\nThis will delete all stored networks and restart in AP mode.\")'>Factory Reset</a>";
         }
+        html += "</div>";
         
     } else if (wifiManager.isAPMode()) {
         html += "<div class='status warning'>";
-        html += "<div style='font-size:32px;margin-bottom:8px;'>⚙️ <strong>Configuration Mode</strong></div>";
+        html += "<span style='font-size:24px;margin-right:8px;'>✓</span>";
+        html += "<strong>Configuration Mode</strong>";
         html += "</div>";
-        
+
         html += "<p style='margin:16px 0;'>Welcome to EasyWiFi! To get started, scan for available networks and configure your WiFi connection.</p>";
         
         html += "<div style='background:#f8f9fa;padding:16px;border-radius:8px;margin:16px 0;'>";
@@ -66,15 +64,6 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
     
     html += "</div>";
     
-    // Add info card
-    html += "<div class='card' style='margin-top:16px;'>";
-    html += "<h2 style='font-size:18px;margin-bottom:12px;'>ℹ️ Information</h2>";
-    html += "<p style='font-size:14px;line-height:1.8;'>";
-    html += "EasyWiFi provides a simple way to configure WiFi credentials on your ESP32-C3 device. ";
-    html += "Scan for networks, enter your password, and the device will remember your settings.";
-    html += "</p>";
-    html += "</div>";
-    
     html += getHTMLFooter();
     return html;
 }
@@ -84,14 +73,6 @@ String WebPages::generateScanPage(const std::vector<WiFiNetwork>& networks, bool
     
     html += "<div class='card'>";
     html += "<h1>📡 Available Networks</h1>";
-    
-    // Add 2.4GHz notice
-    html += "<div style='background:#e3f2fd;border-left:4px solid #2196F3;padding:12px;margin:16px 0;border-radius:4px;'>";
-    html += "<p style='margin:0;font-size:14px;'>";
-    html += "<strong>ℹ️ Note:</strong> ESP32-C3 only supports 2.4GHz WiFi networks. ";
-    html += "5GHz networks are automatically filtered out.";
-    html += "</p>";
-    html += "</div>";
     
     if (!success) {
         html += "<p class='status error'>✗ Scan failed. Please try again.</p>";
@@ -440,9 +421,9 @@ String WebPages::getSignalBarsHTML(int bars) {
     String html = "<span style='font-size: 18px;'>";
     for (int i = 0; i < 4; i++) {
         if (i < bars) {
-            html += "📶";
+            html += "🟢";
         } else {
-            html += "▫";
+            html += "⚫";
         }
     }
     html += "</span>";

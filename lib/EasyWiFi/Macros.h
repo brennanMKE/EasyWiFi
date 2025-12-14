@@ -121,4 +121,3 @@ inline int getSignalBars(int rssi) {
 #define ERROR_LOG_RATE_LIMIT_MS 60000      // Rate limit repeated error logs
 
 #endif // MACROS_H
-
