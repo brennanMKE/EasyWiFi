@@ -437,4 +437,3 @@ void RunLoop::requestConnectionAttempt() {
     connectionRequested = true;
     consecutiveFailures = 0;  // Reset failure counter for new credentials
 }
-

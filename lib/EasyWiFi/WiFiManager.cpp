@@ -40,10 +40,62 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
     
     ESP_LOGI(TAG, "Attempting to connect to %d stored network(s)", credentials.size());
     
-    // Log all credentials
-    for (const auto& cred : credentials) {
-        ESP_LOGI(TAG, "  SSID: '%s' (length: %d)", cred.ssid.c_str(), cred.ssid.length());
-        ESP_LOGI(TAG, "  Password length: %d chars", cred.password.length());
+    // === PRE-SCAN: Check which networks are in range ===
+    std::vector<bool> networkInRange(credentials.size(), true);  // Assume all in range by default
+    
+    if (WIFI_PRE_SCAN_ENABLED && credentials.size() > 1) {
+        ESP_LOGI(TAG, "========================================");
+        ESP_LOGI(TAG, "Pre-Scan: Checking which networks are in range");
+        ESP_LOGI(TAG, "========================================");
+        
+        WiFi.mode(WIFI_STA);
+        int numScanned = WiFi.scanNetworks(false, false);  // Quick scan, don't show hidden
+        
+        if (numScanned > 0) {
+            ESP_LOGI(TAG, "Found %d network(s) in range", numScanned);
+            
+            // Build list of available SSIDs
+            std::vector<String> availableSSIDs;
+            for (int i = 0; i < numScanned; i++) {
+                String scannedSSID = WiFi.SSID(i);
+                int channel = WiFi.channel(i);
+                
+                // Only consider 2.4GHz networks (channels 1-14)
+                if (channel >= 1 && channel <= 14) {
+                    availableSSIDs.push_back(scannedSSID);
+                }
+            }
+            
+            ESP_LOGI(TAG, "Found %d 2.4GHz network(s) in range", availableSSIDs.size());
+            
+            // Check which stored credentials are in range
+            for (size_t i = 0; i < credentials.size(); i++) {
+                networkInRange[i] = false;  // Assume not in range
+                for (const auto& available : availableSSIDs) {
+                    if (available == credentials[i].ssid) {
+                        networkInRange[i] = true;
+                        break;
+                    }
+                }
+                
+                ESP_LOGI(TAG, "  %s: %s", credentials[i].ssid.c_str(), 
+                         networkInRange[i] ? "✓ In range" : "✗ Out of range");
+            }
+            
+            // Clean up scan results
+            WiFi.scanDelete();
+        } else {
+            ESP_LOGW(TAG, "Pre-scan found no networks or failed - will try all stored networks");
+        }
+    }
+    
+    // Log all credentials with in-range status
+    for (size_t i = 0; i < credentials.size(); i++) {
+        const auto& cred = credentials[i];
+        ESP_LOGI(TAG, "  Network %d: '%s' (length: %d) %s", 
+                 i + 1, cred.ssid.c_str(), cred.ssid.length(),
+                 networkInRange[i] ? "[In Range]" : "[Out of Range - Will Skip]");
+        ESP_LOGI(TAG, "    Password length: %d chars", cred.password.length());
         
         // Show password with masking (first 2 and last 2 chars visible)
         String maskedPass = "";
@@ -54,7 +106,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
                         String("*").substring(0, cred.password.length() - 4) + 
                         cred.password.substring(cred.password.length() - 2);
         }
-        ESP_LOGI(TAG, "  Password hint: %s", maskedPass.c_str());
+        ESP_LOGI(TAG, "    Password hint: %s", maskedPass.c_str());
     }
     
     // Configure WiFi for better eero compatibility (BEFORE any connection attempt)
@@ -82,76 +134,200 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
     
     ESP_LOGI(TAG, "  ✓ eero compatibility settings applied");
     
-    // Use direct WiFi.begin() like the working ConnectWiFi code, not WiFiMulti
-    // WiFiMulti may override our carefully configured settings
-    ESP_LOGI(TAG, "Starting connection attempt (timeout: %d seconds)...", WIFI_CONNECTION_TIMEOUT / 1000);
-    ESP_LOGI(TAG, "Using direct WiFi.begin() (ConnectWiFi method)");
-    
-    unsigned long startTime = millis();
-    WiFi.begin(credentials[0].ssid.c_str(), credentials[0].password.c_str());
-    
-    // Poll WiFi.status() without blocking (check frequently, reset watchdog)
+    // Declare variables at function scope for use across phases
+    unsigned long startTime = 0;
+    unsigned long elapsedTime = 0;
     uint8_t status = WL_IDLE_STATUS;
-    unsigned long lastCheck = millis();
-    while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
-        status = WiFi.status();
+    
+    // === PHASE 1: Try first network with direct WiFi.begin() (eero compatibility) ===
+    {
+        bool phase1Skipped = false;
+        
+        if (networkInRange[0]) {
+            ESP_LOGI(TAG, "========================================");
+            ESP_LOGI(TAG, "Phase 1: Trying first network with eero-compatible settings");
+            ESP_LOGI(TAG, "  Network 1/%d: %s", credentials.size(), credentials[0].ssid.c_str());
+            ESP_LOGI(TAG, "  Settings: Low power (8.5dBm), 802.11b/g only");
+            ESP_LOGI(TAG, "  Timeout: %d seconds", WIFI_CONNECTION_TIMEOUT / 1000);
+            ESP_LOGI(TAG, "========================================");
+        } else {
+            ESP_LOGI(TAG, "========================================");
+            ESP_LOGI(TAG, "Phase 1: SKIPPED - Network 1 (%s) is out of range", credentials[0].ssid.c_str());
+            ESP_LOGI(TAG, "========================================");
+            phase1Skipped = true;
+        }
+        
+        if (!phase1Skipped) {
+            startTime = millis();
+            WiFi.begin(credentials[0].ssid.c_str(), credentials[0].password.c_str());
+            
+            // Poll WiFi.status() without blocking (check frequently, reset watchdog)
+            status = WL_IDLE_STATUS;
+            unsigned long lastCheck = millis();
+            while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
+                status = WiFi.status();
+                if (status == WL_CONNECTED) {
+                    break;
+                }
+                
+                // Reset watchdog every 100ms to prevent timeout
+                unsigned long now = millis();
+                if (now - lastCheck >= 100) {
+                    esp_task_wdt_reset();  // Keep watchdog happy
+                    lastCheck = now;
+                }
+                // Don't use delay() - just loop and check status rapidly
+                yield();  // Allow other tasks to run
+            }
+            
+            elapsedTime = millis() - startTime;
+            ESP_LOGI(TAG, "Phase 1 completed in %lu ms", elapsedTime);
+            
+            if (status == WL_CONNECTED) {
+                // Phase 1 succeeded!
+                ESP_LOGI(TAG, "========== Post-Connection Diagnostics ==========");
+                logWiFiDiagnostics();
+                ESP_LOGI(TAG, "✓ Phase 1 SUCCESS: Connected to %s", WiFi.SSID().c_str());
+                ESP_LOGI(TAG, "  BSSID: %s", WiFi.BSSIDstr().c_str());
+                ESP_LOGI(TAG, "  Channel: %d", WiFi.channel());
+                ESP_LOGI(TAG, "  IP address: %s", WiFi.localIP().toString().c_str());
+                ESP_LOGI(TAG, "  Signal strength: %d dBm", WiFi.RSSI());
+                ESP_LOGI(TAG, "  Connection quality: %s", 
+                         WiFi.RSSI() > -50 ? "Excellent" : 
+                         WiFi.RSSI() > -60 ? "Good" : 
+                         WiFi.RSSI() > -70 ? "Fair" : "Weak");
+                errorHandler.recordRecovery();
+                return WiFiError::SUCCESS;
+            }
+            
+            // Phase 1 failed, log details
+            ESP_LOGW(TAG, "✗ Phase 1 FAILED: Network 1 (%s) - %s", 
+                     credentials[0].ssid.c_str(), getWiFiStatusName((wl_status_t)status));
+        }
+    }  // End Phase 1 block
+    
+    // === PHASE 2: Try remaining networks with WiFiMulti (standard settings) ===
+    if (credentials.size() > 1) {
+        // Count how many networks are in range for Phase 2
+        int inRangeCount = 0;
+        for (size_t i = 1; i < credentials.size(); i++) {
+            if (networkInRange[i]) inRangeCount++;
+        }
+        
+        if (inRangeCount == 0) {
+            ESP_LOGW(TAG, "========================================");
+            ESP_LOGW(TAG, "Phase 2: SKIPPED - No remaining networks in range");
+            ESP_LOGW(TAG, "All %d stored network(s) are out of range", credentials.size());
+            ESP_LOGW(TAG, "========================================");
+            
+            WiFiError error = WiFiError::SSID_NOT_FOUND;
+            errorHandler.recordError((uint32_t)error, "All networks out of range");
+            if (outError) {
+                *outError = errorHandler.getStats().lastError;
+            }
+            return error;
+        }
+        ESP_LOGI(TAG, "========================================");
+        ESP_LOGI(TAG, "Phase 2: Trying remaining %d in-range network(s) with standard settings", inRangeCount);
+        ESP_LOGI(TAG, "  Settings: Full power (19.5dBm), 802.11b/g/n");
+        ESP_LOGI(TAG, "========================================");
+        
+        // Disconnect from failed attempt
+        WiFi.disconnect();
+        unsigned long disconnectStart = millis();
+        while (millis() - disconnectStart < 500) {
+            esp_task_wdt_reset();
+            yield();
+        }
+        
+        // Reset to standard WiFi settings for better range/speed
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Full power
+        esp_err_t result = esp_wifi_set_protocol(WIFI_IF_STA, 
+            WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+        if (result == ESP_OK) {
+            ESP_LOGI(TAG, "  ✓ Set WiFi protocol to 802.11b/g/n (full protocol support)");
+        }
+        ESP_LOGI(TAG, "  ✓ Set transmit power to 19.5dBm (full power)");
+        
+        // Add remaining networks to WiFiMulti (only those in range)
+        // Note: WiFiMulti doesn't have a public clear method, but it will work fine
+        int addedCount = 0;
+        for (size_t i = 1; i < credentials.size(); i++) {
+            if (networkInRange[i]) {
+                addedCount++;
+                ESP_LOGI(TAG, "  Adding network %d/%d: %s [In Range]", 
+                         i + 1, credentials.size(), credentials[i].ssid.c_str());
+                wifiMulti.addAP(credentials[i].ssid.c_str(), credentials[i].password.c_str());
+            } else {
+                ESP_LOGI(TAG, "  Skipping network %d/%d: %s [Out of Range]", 
+                         i + 1, credentials.size(), credentials[i].ssid.c_str());
+            }
+        }
+        
+        if (addedCount == 0) {
+            ESP_LOGW(TAG, "No in-range networks to add to Phase 2");
+        }
+        
+        // Try to connect with WiFiMulti
+        ESP_LOGI(TAG, "Starting Phase 2 connection attempt...");
+        startTime = millis();
+        status = WL_IDLE_STATUS;
+        
+        while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
+            status = (wl_status_t)wifiMulti.run(1000);  // Check every second
+            if (status == WL_CONNECTED) {
+                break;
+            }
+            esp_task_wdt_reset();
+            yield();
+        }
+        
+        elapsedTime = millis() - startTime;
+        ESP_LOGI(TAG, "Phase 2 completed in %lu ms", elapsedTime);
+        
         if (status == WL_CONNECTED) {
-            break;
+            // Phase 2 succeeded!
+            ESP_LOGI(TAG, "========== Post-Connection Diagnostics ==========");
+            logWiFiDiagnostics();
+            ESP_LOGI(TAG, "✓ Phase 2 SUCCESS: Connected to %s (from networks 2-%d)", 
+                     WiFi.SSID().c_str(), credentials.size());
+            ESP_LOGI(TAG, "  BSSID: %s", WiFi.BSSIDstr().c_str());
+            ESP_LOGI(TAG, "  Channel: %d", WiFi.channel());
+            ESP_LOGI(TAG, "  IP address: %s", WiFi.localIP().toString().c_str());
+            ESP_LOGI(TAG, "  Signal strength: %d dBm", WiFi.RSSI());
+            errorHandler.recordRecovery();
+            
+            // Move this successful network to first position for next boot
+            ESP_LOGI(TAG, "Moving '%s' to priority 1 for faster connection next time", 
+                     WiFi.SSID().c_str());
+            storage.moveCredentialToFirst(WiFi.SSID());
+            
+            return WiFiError::SUCCESS;
         }
         
-        // Reset watchdog every 100ms to prevent timeout
-        unsigned long now = millis();
-        if (now - lastCheck >= 100) {
-            esp_task_wdt_reset();  // Keep watchdog happy
-            lastCheck = now;
-        }
-        // Don't use delay() - just loop and check status rapidly
-        yield();  // Allow other tasks to run
+        ESP_LOGW(TAG, "✗ Phase 2 FAILED: All %d networks failed", credentials.size());
     }
     
-    unsigned long elapsedTime = millis() - startTime;
-    ESP_LOGI(TAG, "Connection attempt completed in %lu ms", elapsedTime);
+    // All networks failed
+    ESP_LOGE(TAG, "========================================");
+    ESP_LOGE(TAG, "CONNECTION FAILED: All %d stored network(s) unreachable", credentials.size());
+    ESP_LOGE(TAG, "========================================");
     
-    // Log WiFi state after connection attempt
-    ESP_LOGI(TAG, "========== Post-Connection Diagnostics ==========");
-    logWiFiDiagnostics();
-    
-    if (status == WL_CONNECTED) {
-        ESP_LOGI(TAG, "✓ Successfully connected to %s", WiFi.SSID().c_str());
-        ESP_LOGI(TAG, "  BSSID: %s", WiFi.BSSIDstr().c_str());
-        ESP_LOGI(TAG, "  Channel: %d", WiFi.channel());
-        ESP_LOGI(TAG, "  IP address: %s", WiFi.localIP().toString().c_str());
-        ESP_LOGI(TAG, "  Signal strength: %d dBm", WiFi.RSSI());
-        ESP_LOGI(TAG, "  Connection quality: %s", 
-                 WiFi.RSSI() > -50 ? "Excellent" : 
-                 WiFi.RSSI() > -60 ? "Good" : 
-                 WiFi.RSSI() > -70 ? "Fair" : "Weak");
-        errorHandler.recordRecovery();
-        return WiFiError::SUCCESS;
-    } else {
-        WiFiError error = WiFiError::CONNECT_FAILED;
-        
-        // Determine specific error type
-        if (status == WL_NO_SSID_AVAIL) {
-            error = WiFiError::SSID_NOT_FOUND;
-        } else if (status == WL_CONNECT_FAILED) {
-            error = WiFiError::AUTH_FAILED;
-        } else if (elapsedTime >= WIFI_CONNECTION_TIMEOUT - 1000) {
-            error = WiFiError::CONNECT_TIMEOUT;
-        }
-        
-        ESP_LOGW(TAG, "✗ Connection attempt failed");
-        ESP_LOGW(TAG, "  WiFi status: %d (%s)", status, getWiFiStatusName((wl_status_t)status));
-        ESP_LOGW(TAG, "  Time elapsed: %lu ms (timeout was %d ms)", elapsedTime, WIFI_CONNECTION_TIMEOUT);
-        ESP_LOGW(TAG, "  Error: %s", errorHandler.getErrorMessage(error));
-        
-        errorHandler.recordError((uint32_t)error, errorHandler.getErrorMessage(error));
-        if (outError) {
-            *outError = errorHandler.getStats().lastError;
-        }
-        
-        return error;
+    WiFiError error = WiFiError::CONNECT_FAILED;
+    if (status == WL_NO_SSID_AVAIL) {
+        error = WiFiError::SSID_NOT_FOUND;
+    } else if (status == WL_CONNECT_FAILED) {
+        error = WiFiError::AUTH_FAILED;
+    } else if (elapsedTime >= WIFI_CONNECTION_TIMEOUT - 1000) {
+        error = WiFiError::CONNECT_TIMEOUT;
     }
+    
+    errorHandler.recordError((uint32_t)error, "All stored networks failed");
+    if (outError) {
+        *outError = errorHandler.getStats().lastError;
+    }
+    
+    return error;
 }
 
 // Backward compatible wrapper
@@ -587,5 +763,3 @@ void WiFiManager::logWiFiDiagnostics() {
     }
     ESP_LOGI(TAG, "======================================");
 }
-
-

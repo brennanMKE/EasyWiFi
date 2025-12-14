@@ -209,3 +209,99 @@ String Storage::getPasswordKey(int index) {
     return String(NVS_KEY_PASS_PREFIX) + String(index);
 }
 
+bool Storage::deleteCredential(const String& ssid) {
+    std::vector<WiFiCredential> credentials;
+    loadCredentials(credentials);
+    
+    bool found = false;
+    for (auto it = credentials.begin(); it != credentials.end(); ++it) {
+        if (it->ssid == ssid) {
+            credentials.erase(it);
+            found = true;
+            ESP_LOGI(TAG, "Deleted credential: %s", ssid.c_str());
+            break;
+        }
+    }
+    
+    if (!found) {
+        ESP_LOGW(TAG, "Credential not found: %s", ssid.c_str());
+        return false;
+    }
+    
+    // Clear and re-save remaining credentials
+    clearCredentials();
+    for (size_t i = 0; i < credentials.size(); i++) {
+        String ssidKey = getSSIDKey(i);
+        String passKey = getPasswordKey(i);
+        preferences.putString(ssidKey.c_str(), credentials[i].ssid);
+        preferences.putString(passKey.c_str(), credentials[i].password);
+    }
+    
+    preferences.putInt(NVS_KEY_COUNT, credentials.size());
+    preferences.putBool(NVS_KEY_CONFIGURED, credentials.size() > 0);
+    
+    ESP_LOGI(TAG, "Remaining credentials: %d", credentials.size());
+    return true;
+}
+
+bool Storage::getCredentialsList(std::vector<String>& ssidList) {
+    ssidList.clear();
+    std::vector<WiFiCredential> credentials;
+    if (loadCredentials(credentials)) {
+        for (const auto& cred : credentials) {
+            ssidList.push_back(cred.ssid);
+        }
+        ESP_LOGV(TAG, "Retrieved %d SSID(s)", ssidList.size());
+        return true;
+    }
+    return false;
+}
+
+int Storage::getCredentialIndex(const String& ssid) {
+    std::vector<WiFiCredential> credentials;
+    loadCredentials(credentials);
+    
+    for (size_t i = 0; i < credentials.size(); i++) {
+        if (credentials[i].ssid == ssid) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool Storage::moveCredentialToFirst(const String& ssid) {
+    std::vector<WiFiCredential> credentials;
+    loadCredentials(credentials);
+    
+    int index = -1;
+    for (size_t i = 0; i < credentials.size(); i++) {
+        if (credentials[i].ssid == ssid) {
+            index = i;
+            break;
+        }
+    }
+    
+    if (index <= 0) {
+        // Not found or already first
+        return false;
+    }
+    
+    // Move to front
+    WiFiCredential temp = credentials[index];
+    credentials.erase(credentials.begin() + index);
+    credentials.insert(credentials.begin(), temp);
+    
+    // Save reordered list
+    clearCredentials();
+    for (size_t i = 0; i < credentials.size(); i++) {
+        String ssidKey = getSSIDKey(i);
+        String passKey = getPasswordKey(i);
+        preferences.putString(ssidKey.c_str(), credentials[i].ssid);
+        preferences.putString(passKey.c_str(), credentials[i].password);
+    }
+    
+    preferences.putInt(NVS_KEY_COUNT, credentials.size());
+    
+    ESP_LOGI(TAG, "Moved '%s' to first priority", ssid.c_str());
+    return true;
+}

@@ -46,6 +46,12 @@ public:
     // Get count of stored credentials
     int getCredentialCount();
     
+    // Credential management
+    bool deleteCredential(const String& ssid);
+    bool getCredentialsList(std::vector<String>& ssidList);
+    int getCredentialIndex(const String& ssid);
+    bool moveCredentialToFirst(const String& ssid);
+    
     // Error monitoring
     const ErrorStats& getErrorStats() const { return errorHandler.getStats(); }
     bool isHealthy() const { return errorHandler.isHealthy(); }
@@ -62,4 +68,3 @@ private:
 };
 
 #endif // STORAGE_H
-

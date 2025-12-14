@@ -31,7 +31,8 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         html += "</div>";
         
         html += "<div class='button-group'>";
-        html += "<a href='/scan' class='button small'>Change Network</a>";
+        html += "<a href='/credentials' class='button small'>Manage Networks</a>";
+        html += "<a href='/scan' class='button small'>Add Network</a>";
         html += "<a href='/api/status' class='button small'>API Status</a>";
         if (storage.isConfigured()) {
             html += "<a href='/reset' class='button small danger' onclick='return confirm(\"⚠️ Clear all WiFi credentials and reboot?\\n\\nThis will delete all stored networks and restart in AP mode.\")'>Factory Reset</a>";
@@ -128,7 +129,7 @@ String WebPages::generateScanPage(const std::vector<WiFiNetwork>& networks, bool
     
     html += "<div class='button-group'>";
     html += "<button onclick='refreshScan()' class='button primary' id='scanBtn'>🔄 Scan Again</button>";
-    html += "<a href='/' class='button'>Back to Home</a>";
+    html += "<a href='/' class='button'>Home</a>";
     html += "</div>";
     
     html += "</div>";
@@ -322,7 +323,7 @@ String WebPages::generateSuccessPage() {
     html += "<div class='card'>";
     html += "<h1>✓ Success</h1>";
     html += "<p class='status success'>Connected to WiFi successfully!</p>";
-    html += "<a href='/' class='button primary'>Go Home</a>";
+    html += "<a href='/' class='button primary'>Home</a>";
     html += "</div>";
     
     html += getHTMLFooter();
@@ -335,7 +336,7 @@ String WebPages::generateErrorPage(const String& errorMessage) {
     html += "<div class='card'>";
     html += "<h1>✗ Error</h1>";
     html += "<p class='status error'>" + errorMessage + "</p>";
-    html += "<a href='/' class='button'>Go Home</a>";
+    html += "<a href='/' class='button'>Home</a>";
     html += "</div>";
     
     html += getHTMLFooter();
@@ -351,6 +352,89 @@ String WebPages::generateResetPage() {
     html += "<p>Device will reboot in 2 seconds...</p>";
     html += "</div>";
     
+    html += getHTMLFooter();
+    return html;
+}
+
+String WebPages::generateCredentialsPage(Storage& storage, const String& currentSSID) {
+    String html = getHTMLHeader("Manage Networks");
+    
+    html += "<div class='card'>";
+    html += "<h1>📋 Stored Networks</h1>";
+    
+    std::vector<String> ssidList;
+    storage.getCredentialsList(ssidList);
+    
+    if (ssidList.empty()) {
+        html += "<p style='color:#666;margin:16px 0;'>No networks configured.</p>";
+        html += "<div class='button-group'>";
+        html += "<a href='/scan' class='button small primary'>Add Network</a>";
+        html += "<a href='/' class='button small'>Back</a>";
+        html += "</div>";
+    } else {
+        html += "<p style='color:#666;margin-bottom:16px;'>";
+        html += String(ssidList.size()) + " of " + String(MAX_STORED_NETWORKS) + " networks stored";
+        html += "</p>";
+        
+        html += "<div class='network-list'>";
+        
+        for (size_t i = 0; i < ssidList.size(); i++) {
+            String ssid = ssidList[i];
+            bool isConnected = (ssid == currentSSID);
+            
+            html += "<div class='network-item' style='";
+            if (isConnected) {
+                html += "border:2px solid #4CAF50;background:#f0f8f0;";
+            }
+            html += "'>";
+            
+            html += "<div class='network-info'>";
+            html += "<strong>" + ssid + "</strong>";
+            
+            if (isConnected) {
+                html += " <span style='background:#4CAF50;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:6px;'>CONNECTED</span>";
+            }
+            
+            if (i == 0) {
+                html += " <span style='background:#2196F3;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:6px;'>PRIORITY 1</span>";
+            }
+            
+            html += "<br><small style='color:#666;'>Network " + String(i + 1) + " of " + String(ssidList.size());
+            if (i == 0) {
+                html += " • Tried first with eero-compatible settings";
+            } else {
+                html += " • Fallback network with standard settings";
+            }
+            html += "</small>";
+            html += "</div>";
+            
+            html += "<div class='network-action'>";
+            // Allow deletion unless it's the only connected network
+            if (!isConnected || ssidList.size() > 1) {
+                html += "<a href='/api/credentials?ssid=" + ssid + "&action=delete' ";
+                html += "class='button small danger' ";
+                html += "onclick='return confirm(\"Delete \\\"" + ssid + "\\\" from stored networks?\")'>Delete</a>";
+            } else {
+                html += "<span style='color:#999;font-size:12px;'>Cannot delete<br>while connected</span>";
+            }
+            html += "</div>";
+            
+            html += "</div>";
+        }
+        
+        html += "</div>";
+        
+        html += "<div class='button-group'>";
+        if (ssidList.size() < MAX_STORED_NETWORKS) {
+            html += "<a href='/scan' class='button small primary'>Add Network</a>";
+        } else {
+            html += "<p style='color:#999;font-size:14px;margin:8px 0;'>Maximum " + String(MAX_STORED_NETWORKS) + " networks stored</p>";
+        }
+        html += "<a href='/' class='button small'>Home</a>";
+        html += "</div>";
+    }
+    
+    html += "</div>";
     html += getHTMLFooter();
     return html;
 }
@@ -433,4 +517,3 @@ String WebPages::getSignalBarsHTML(int bars) {
 String WebPages::getLockIconHTML() {
     return "<span>🔒</span>";
 }
-

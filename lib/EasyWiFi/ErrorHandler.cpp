@@ -124,4 +124,3 @@ bool ErrorHandler::shouldLogError() {
     // Log if enough time has passed (defined in Macros.h or default 60s)
     return (now - lastLogTime) > 60000;
 }
-

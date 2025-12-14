@@ -42,4 +42,3 @@ private:
 };
 
 #endif // STATUSLED_H
-

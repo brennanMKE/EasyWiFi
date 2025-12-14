@@ -36,6 +36,7 @@ void ConfigServer::setup() {
     server.on(ENDPOINT_SAVE, HTTP_POST, std::bind(&ConfigServer::handleSave, this));
     server.on(ENDPOINT_STATUS, HTTP_GET, std::bind(&ConfigServer::handleStatus, this));
     server.on(ENDPOINT_RESET, HTTP_GET, std::bind(&ConfigServer::handleReset, this));
+    server.on(ENDPOINT_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleCredentials, this));
     
     // REST API routes
     server.on(ENDPOINT_API_STATUS, HTTP_GET, std::bind(&ConfigServer::handleAPIStatus, this));
@@ -43,8 +44,9 @@ void ConfigServer::setup() {
     server.on(ENDPOINT_API_CONFIGURE, HTTP_POST, std::bind(&ConfigServer::handleAPIConfigure, this));
     server.on(ENDPOINT_API_CONNECT, HTTP_POST, std::bind(&ConfigServer::handleAPIConnect, this));
     server.on(ENDPOINT_API_CREDENTIALS, HTTP_DELETE, std::bind(&ConfigServer::handleAPICredentials, this));
+    server.on(ENDPOINT_API_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleAPICredentialsDelete, this));
     server.on(ENDPOINT_API_RESET, HTTP_GET, std::bind(&ConfigServer::handleAPIReset, this));
-    server.on("/api/health", HTTP_GET, std::bind(&ConfigServer::handleAPIHealth, this));
+    server.on(ENDPOINT_API_HEALTH, HTTP_GET, std::bind(&ConfigServer::handleAPIHealth, this));
     
     // CORS preflight handler
     server.on(ENDPOINT_API_STATUS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
@@ -525,4 +527,46 @@ void ConfigServer::handleAPIHealth() {
     sendJSON(HTTP_STATUS_OK, response);
 }
 
+void ConfigServer::handleCredentials() {
+    ESP_LOGI(TAG, "GET /credentials");
+    
+    String currentSSID = WiFi.SSID();
+    String html = webPages.generateCredentialsPage(storage, currentSSID);
+    sendHTML(HTTP_STATUS_OK, html);
+}
 
+void ConfigServer::handleAPICredentialsDelete() {
+    ESP_LOGD(TAG, "GET /api/credentials (delete via query)");
+    
+    if (!server.hasArg("ssid") || !server.hasArg("action")) {
+        sendHTML(HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Missing parameters"));
+        return;
+    }
+    
+    String ssid = server.arg("ssid");
+    String action = server.arg("action");
+    
+    if (action == "delete") {
+        // Don't allow deleting the currently connected network if it's the only one
+        std::vector<String> ssidList;
+        storage.getCredentialsList(ssidList);
+        
+        if (ssid == WiFi.SSID() && ssidList.size() == 1) {
+            sendHTML(HTTP_STATUS_BAD_REQUEST, 
+                    webPages.generateErrorPage("Cannot delete the only network while connected to it. Add another network first."));
+            return;
+        }
+        
+        if (storage.deleteCredential(ssid)) {
+            ESP_LOGI(TAG, "Deleted credential: %s", ssid.c_str());
+            
+            // Redirect back to credentials page
+            server.sendHeader("Location", "/credentials", true);
+            server.send(HTTP_STATUS_REDIRECT, "text/plain", "");
+        } else {
+            sendHTML(HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
+        }
+    } else {
+        sendHTML(HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Invalid action"));
+    }
+}

@@ -23,6 +23,7 @@ public:
     String generateSuccessPage();
     String generateErrorPage(const String& errorMessage);
     String generateResetPage();
+    String generateCredentialsPage(Storage& storage, const String& currentSSID);
 
 private:
     // Common HTML elements
@@ -34,4 +35,3 @@ private:
 };
 
 #endif // WEBPAGES_H
-

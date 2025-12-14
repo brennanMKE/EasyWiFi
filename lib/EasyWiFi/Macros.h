@@ -9,6 +9,7 @@
 #define WIFI_CONNECTION_RETRY_DELAY 250    // Delay between connection attempts (ms)
 #define WIFI_SCAN_TIMEOUT 5000            // Timeout for WiFi scan (ms)
 #define MAX_STORED_NETWORKS 5              // Maximum number of stored WiFi credentials
+#define WIFI_PRE_SCAN_ENABLED true        // Scan before connecting to filter out-of-range networks
 #define CONNECTION_STATE_TIMEOUT 30000     // Max time in CONNECTING state (30 seconds)
 #define AP_MODE_RETRY_DELAY 60000          // Wait 60 seconds in AP mode before auto-retry (ms)
 #define MAX_CONSECUTIVE_FAILURES 3         // Max failures before staying in AP mode permanently
@@ -49,6 +50,8 @@
 #define ENDPOINT_API_CONNECT "/api/connect"
 #define ENDPOINT_API_CREDENTIALS "/api/credentials"
 #define ENDPOINT_API_RESET "/api/reset"
+#define ENDPOINT_API_HEALTH "/api/health"
+#define ENDPOINT_CREDENTIALS "/credentials"
 
 // Storage Configuration (NVS)
 #define NVS_NAMESPACE "easywifi"

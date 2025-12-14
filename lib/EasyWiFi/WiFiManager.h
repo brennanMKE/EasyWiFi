@@ -109,4 +109,3 @@ private:
 };
 
 #endif // WIFIMANAGER_H
-

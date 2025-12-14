@@ -42,6 +42,7 @@ private:
     void handleSave();
     void handleStatus();
     void handleReset();
+    void handleCredentials();
     
     // Route handlers - REST API
     void handleAPIStatus();
@@ -51,6 +52,7 @@ private:
     void handleAPICredentials();
     void handleAPIReset();
     void handleAPIHealth();
+    void handleAPICredentialsDelete();
     
     // Utility handlers
     void handleNotFound();
