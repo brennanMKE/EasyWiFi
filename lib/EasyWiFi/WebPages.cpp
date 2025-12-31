@@ -53,13 +53,13 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         html += "</div>";
         
         html += "<div class='button-group'>";
-        html += "<a href='/scan' class='button primary' style='font-size:18px;padding:16px 32px;'>🔍 Scan for Networks</a>";
+        html += "<a href='/wifi/scan' class='button primary' style='font-size:18px;padding:16px 32px;'>🔍 Scan for Networks</a>";
         html += "</div>";
         
     } else {
         html += "<p class='status'>Status: " + wifiManager.getStatus() + "</p>";
         html += "<div class='button-group'>";
-        html += "<a href='/scan' class='button primary'>Scan Networks</a>";
+        html += "<a href='/wifi/scan' class='button primary'>Scan Networks</a>";
         html += "</div>";
     }
     
@@ -120,7 +120,7 @@ String WebPages::generateScanPage(const std::vector<WiFiNetwork>& networks, bool
         }
         html += "</div>";
         html += "<div class='network-action'>";
-        html += "<a href='/configure?ssid=" + network.ssid + "' class='button small' onclick='event.stopPropagation()'>Connect</a>";
+        html += "<a href='/wifi/configure?ssid=" + network.ssid + "' class='button small' onclick='event.stopPropagation()'>Connect</a>";
         html += "</div>";
         html += "</div>";
     }
@@ -137,14 +137,14 @@ String WebPages::generateScanPage(const std::vector<WiFiNetwork>& networks, bool
     // Add JavaScript for interactive features
     html += "<script>";
     html += "function selectNetwork(ssid) {";
-    html += "  window.location.href = '/configure?ssid=' + encodeURIComponent(ssid);";
+    html += "  window.location.href = '/wifi/configure?ssid=' + encodeURIComponent(ssid);";
     html += "}";
     html += "";
     html += "function refreshScan() {";
     html += "  var btn = document.getElementById('scanBtn');";
     html += "  btn.innerHTML = '⏳ Scanning...';";
     html += "  btn.disabled = true;";
-    html += "  window.location.href = '/scan';";
+    html += "  window.location.href = '/wifi/scan';";
     html += "}";
     html += "</script>";
     
@@ -190,7 +190,7 @@ String WebPages::generateConfigPage(const String& ssid) {
     
     html += "<div class='button-group'>";
     html += "<button type='submit' class='button primary' id='submitBtn'>Save & Connect</button>";
-    html += "<a href='/scan' class='button'>Cancel</a>";
+    html += "<a href='/wifi/scan' class='button'>Cancel</a>";
     html += "</div>";
     
     html += "</form>";
@@ -269,10 +269,10 @@ String WebPages::generateStatusPage(WiFiManager& wifiManager) {
     html += "      ";
     html += "      if (data.wifi.connected) {";
     html += "        document.querySelector('.loading').style.display = 'none';";
-    html += "        document.getElementById('statusText').className = 'status success';";
-    html += "        document.getElementById('statusText').innerHTML = '✓ Connected to ' + data.wifi.ssid;";
-    html += "        document.getElementById('message').innerHTML = 'IP Address: ' + data.wifi.ip + '<br>Redirecting to home...';";
-    html += "        setTimeout(() => window.location.href = '/', 2000);";
+    html += "                document.getElementById('statusText').className = 'status success';";
+        html += "        document.getElementById('statusText').innerHTML = '✓ Connected to ' + data.wifi.ssid;";
+        html += "        document.getElementById('message').innerHTML = 'IP Address: ' + data.wifi.ip + '<br>Redirecting to home...';";
+        html += "        setTimeout(() => window.location.href = '/wifi', 2000);";
     html += "      } else if (data.wifi.ap_mode && checkCount > 3) {";
     html += "        document.querySelector('.loading').style.display = 'none';";
     html += "        document.getElementById('statusText').className = 'status error';";
@@ -368,8 +368,8 @@ String WebPages::generateCredentialsPage(Storage& storage, const String& current
     if (ssidList.empty()) {
         html += "<p style='color:#666;margin:16px 0;'>No networks configured.</p>";
         html += "<div class='button-group'>";
-        html += "<a href='/scan' class='button small primary'>Add Network</a>";
-        html += "<a href='/' class='button small'>Back</a>";
+        html += "<a href='/wifi/scan' class='button small primary'>Add Network</a>";
+        html += "<a href='/wifi' class='button small'>Back</a>";
         html += "</div>";
     } else {
         html += "<p style='color:#666;margin-bottom:16px;'>";
@@ -434,11 +434,11 @@ String WebPages::generateCredentialsPage(Storage& storage, const String& current
         
         html += "<div class='button-group'>";
         if (ssidList.size() < MAX_STORED_NETWORKS) {
-            html += "<a href='/scan' class='button small primary'>Add Network</a>";
+            html += "<a href='/wifi/scan' class='button small primary'>Add Network</a>";
         } else {
             html += "<p style='color:#999;font-size:14px;margin:8px 0;'>Maximum " + String(MAX_STORED_NETWORKS) + " networks stored</p>";
         }
-        html += "<a href='/' class='button small'>Home</a>";
+        html += "<a href='/wifi' class='button small'>Home</a>";
         html += "</div>";
     }
     
