@@ -8,12 +8,17 @@
 #include "Storage.h"
 #include "WebPages.h"
 #include "Macros.h"
+#include <functional>
 #else
 #error "This code is only intended to be compiled for ESP32 platforms."
 #endif
 
-// Forward declaration to avoid circular dependency
+// Forward declarations to avoid circular dependencies
 class RunLoop;
+class CustomPageHandler;
+
+// Callback type for route handlers
+typedef std::function<void()> RouteHandler;
 
 class ConfigServer {
 public:
@@ -27,6 +32,16 @@ public:
     bool isEnabled();
     void setRunLoop(RunLoop* rl);
     void setDeviceName(const String& name);
+    
+    // Custom page handler support
+    void registerCustomHandler(CustomPageHandler* handler);
+    void on(const String& uri, HTTPMethod method, RouteHandler handler);
+    
+    // Access to components (for custom pages)
+    WiFiManager& getWiFiManager() { return wifiManager; }
+    Storage& getStorage() { return storage; }
+    WebPages& getWebPages() { return webPages; }
+    WebServer& getServer() { return server; }
 
 private:
     String deviceName;

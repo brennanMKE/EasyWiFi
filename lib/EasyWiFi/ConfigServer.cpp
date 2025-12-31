@@ -1,5 +1,6 @@
 #include "ConfigServer.h"
 #include "RunLoop.h"
+#include "CustomPageHandler.h"
 #include <esp_log.h>
 #include <ArduinoJson.h>
 
@@ -23,6 +24,32 @@ void ConfigServer::setRunLoop(RunLoop* rl) {
 void ConfigServer::setDeviceName(const String& name) {
     deviceName = name;
     webPages.setDeviceName(name);
+}
+
+void ConfigServer::on(const String& uri, HTTPMethod method, RouteHandler handler) {
+    server.on(uri.c_str(), method, handler);
+    ESP_LOGI(TAG, "Registered custom route: %s %s", 
+             method == HTTP_GET ? "GET" : method == HTTP_POST ? "POST" : "?", 
+             uri.c_str());
+}
+
+void ConfigServer::registerCustomHandler(CustomPageHandler* handler) {
+    if (!handler) {
+        ESP_LOGW(TAG, "Cannot register null custom handler");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "Registering custom page handler...");
+    
+    // Provide access to EasyWiFi components
+    handler->wifiManager = &wifiManager;
+    handler->storage = &storage;
+    handler->webPages = &webPages;
+    
+    // Let handler register its routes
+    handler->registerRoutes();
+    
+    ESP_LOGI(TAG, "Custom page handler registered successfully");
 }
 
 void ConfigServer::enableCORS() {
@@ -443,24 +470,22 @@ void ConfigServer::handleNotFound() {
     
     // Captive Portal Detection:
     // When devices connect to WiFi, they check for internet by requesting known URLs.
-    // We need to return HTTP 200 (not 404) and redirect to our config page.
-    // This triggers the captive portal popup on iOS, Android, macOS, Windows.
+    // We need to redirect to our config page to trigger the captive portal popup.
     
-    // Common captive portal detection URLs:
-    // - iOS/macOS: captive.apple.com, *.apple.com
-    // - Android: google.com/generate_204, gstatic.com/generate_204
-    // - Windows: msftconnecttest.com
-    // - Ubuntu: connectivity-check.ubuntu.com
-    
-    ESP_LOGI(TAG, "Captive portal detection: redirecting %s to config page", uri.c_str());
-    
-    // Redirect to our configuration page
-    // Using 302 redirect so the OS knows to show the captive portal
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    server.sendHeader("Pragma", "no-cache");
-    server.sendHeader("Expires", "0");
-    server.send(302, "text/plain", "");
+    // Check if this looks like a captive portal detection request
+    if (isCaptivePortalDetection(uri)) {
+        ESP_LOGI(TAG, "Captive portal detection: redirecting %s to /wifi", uri.c_str());
+        server.sendHeader("Location", "/wifi", true);
+        server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        server.sendHeader("Pragma", "no-cache");
+        server.sendHeader("Expires", "0");
+        server.send(302, "text/plain", "");
+    } else {
+        // Show helpful 404 page for genuine navigation errors
+        ESP_LOGI(TAG, "Showing 404 page for: %s", uri.c_str());
+        String html = webPages.generate404Page(uri);
+        server.send(404, "text/html", html);
+    }
 }
 
 // ==================== Helper Methods ====================

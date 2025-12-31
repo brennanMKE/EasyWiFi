@@ -27,13 +27,15 @@ public:
     String generateErrorPage(const String& errorMessage);
     String generateResetPage();
     String generateCredentialsPage(Storage& storage, const String& currentSSID);
+    String generate404Page(const String& requestedPath);
 
-private:
-    String deviceName;
-    // Common HTML elements
+    // Helper methods for custom pages (shared styling)
     String getHTMLHeader(const String& title);
     String getHTMLFooter();
     String getCSS();
+
+private:
+    String deviceName;
     String getSignalBarsHTML(int bars);
     String getLockIconHTML();
 };

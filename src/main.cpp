@@ -1,10 +1,12 @@
 #include <Arduino.h>
 #include <EasyWiFi.h>
 #include <esp_log.h>
+#include "LanternsPages.h"
 
 static const char *TAG = TAG_MAIN;
 
 RunLoop runloop;
+LanternsPages* lanternsPages = nullptr;
 
 void setup() {
     Serial.begin(115200);
@@ -31,6 +33,20 @@ void setup() {
     //
     // See Docs/Customization.md for more details
     runloop.setup("Lanterns");  // Change to your device name
+    
+    // ========================================
+    // Register Custom Pages
+    // ========================================
+    // Create and register your custom page handler
+    // This keeps your device-specific code separate from EasyWiFi
+    ESP_LOGI(TAG, "Registering custom pages for Lanterns functionality...");
+    lanternsPages = new LanternsPages(runloop.getConfigServer());
+    runloop.getConfigServer().registerCustomHandler(lanternsPages);
+    
+    ESP_LOGI(TAG, "Setup complete!");
+    ESP_LOGI(TAG, "Custom pages available at:");
+    ESP_LOGI(TAG, "  - http://lanterns-xxxxxx.local/lanterns");
+    ESP_LOGI(TAG, "  - http://192.168.x.x/lanterns");
 }
 
 void loop() {

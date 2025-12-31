@@ -18,6 +18,15 @@ public:
     RunLoop();
     void setup(const String& deviceName = "EasyWiFi");
     void loop();
+    
+    // Get ConfigServer reference (for registering custom pages)
+    ConfigServer& getConfigServer() { return configServer; }
+    
+    // Request a connection attempt (used by ConfigServer after saving credentials)
+    void requestConnectionAttempt();
+    
+    // Check if connection has failed
+    bool hasConnectionFailed() { return connectionFailed; }
 
 private:
     String deviceName;
@@ -70,10 +79,6 @@ private:
     void logStatus();
     
     bool connectionRequested;
-    
-public:
-    bool hasConnectionFailed() { return connectionFailed; }
-    void requestConnectionAttempt();
 };
 
 #endif // RUNLOOP_H

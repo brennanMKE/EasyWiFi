@@ -38,20 +38,21 @@
 #define WEB_SERVER_STACK_SIZE 8192         // Server task stack size
 
 // REST API Endpoints
-#define ENDPOINT_ROOT "/"
-#define ENDPOINT_SCAN "/scan"
-#define ENDPOINT_CONFIGURE "/configure"
-#define ENDPOINT_SAVE "/save"
-#define ENDPOINT_STATUS "/status"
-#define ENDPOINT_RESET "/reset"
-#define ENDPOINT_API_STATUS "/api/status"
-#define ENDPOINT_API_SCAN "/api/scan"
-#define ENDPOINT_API_CONFIGURE "/api/configure"
-#define ENDPOINT_API_CONNECT "/api/connect"
-#define ENDPOINT_API_CREDENTIALS "/api/credentials"
-#define ENDPOINT_API_RESET "/api/reset"
-#define ENDPOINT_API_HEALTH "/api/health"
-#define ENDPOINT_CREDENTIALS "/credentials"
+// WiFi configuration is now under /wifi to allow custom pages at root /
+#define ENDPOINT_ROOT "/wifi"
+#define ENDPOINT_SCAN "/wifi/scan"
+#define ENDPOINT_CONFIGURE "/wifi/configure"
+#define ENDPOINT_SAVE "/wifi/save"
+#define ENDPOINT_STATUS "/wifi/status"
+#define ENDPOINT_RESET "/wifi/reset"
+#define ENDPOINT_API_STATUS "/wifi/api/status"
+#define ENDPOINT_API_SCAN "/wifi/api/scan"
+#define ENDPOINT_API_CONFIGURE "/wifi/api/configure"
+#define ENDPOINT_API_CONNECT "/wifi/api/connect"
+#define ENDPOINT_API_CREDENTIALS "/wifi/api/credentials"
+#define ENDPOINT_API_RESET "/wifi/api/reset"
+#define ENDPOINT_API_HEALTH "/wifi/api/health"
+#define ENDPOINT_CREDENTIALS "/wifi/credentials"
 
 // Storage Configuration (NVS)
 #define NVS_NAMESPACE "easywifi"
@@ -124,5 +125,28 @@ inline int getSignalBars(int rssi) {
 #define ERROR_LOG_RATE_LIMIT_MS 60000      // Rate limit repeated error logs
 #define ERROR_HANDLE_RATE_LIMIT_MS 1000    // Minimum time between error handling attempts (prevents tight loops)
 #define FORCE_AP_ON_NO_NETWORKS true       // Auto-enter AP mode when no networks available
+
+// Captive Portal Detection Strings
+// When devices connect to WiFi, they check for internet by requesting known URLs
+// These are common URLs that various OSes use for captive portal detection
+static const char* CAPTIVE_PORTAL_DETECTION_STRINGS[] = {
+    "generate_204",      // Android
+    "hotspot-detect",    // iOS/macOS
+    "connecttest",       // Windows
+    "success.txt",       // Firefox
+    "canonical.html",    // Ubuntu
+    "ncsi.txt",          // Windows Network Connectivity Status Indicator
+    "redirect"           // Generic
+};
+
+// Helper function to check if a URI matches captive portal detection patterns
+inline bool isCaptivePortalDetection(const String& uri) {
+    for (size_t i = 0; i < ARRAY_SIZE(CAPTIVE_PORTAL_DETECTION_STRINGS); i++) {
+        if (uri.indexOf(CAPTIVE_PORTAL_DETECTION_STRINGS[i]) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 #endif // MACROS_H
