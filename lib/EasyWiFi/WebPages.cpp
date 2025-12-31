@@ -39,6 +39,11 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         }
         html += "</div>";
         
+        // Link back to main application
+        html += "<div style='margin-top:24px;'>";
+        html += "<a href='/' class='button'>← Back to " + deviceName + "</a>";
+        html += "</div>";
+        
     } else if (wifiManager.isAPMode()) {
         html += "<div class='status warning'>";
         html += "<span style='font-size:24px;margin-right:8px;'>✓</span>";
@@ -56,10 +61,20 @@ String WebPages::generateHomePage(WiFiManager& wifiManager, Storage& storage) {
         html += "<a href='/wifi/scan' class='button primary' style='font-size:18px;padding:16px 32px;'>🔍 Scan for Networks</a>";
         html += "</div>";
         
+        // Link back to main application (if device has custom pages)
+        html += "<div style='margin-top:24px;'>";
+        html += "<a href='/' class='button small'>← Back to " + deviceName + "</a>";
+        html += "</div>";
+        
     } else {
         html += "<p class='status'>Status: " + wifiManager.getStatus() + "</p>";
         html += "<div class='button-group'>";
         html += "<a href='/wifi/scan' class='button primary'>Scan Networks</a>";
+        html += "</div>";
+        
+        // Link back to main application
+        html += "<div style='margin-top:24px;'>";
+        html += "<a href='/' class='button small'>← Back to " + deviceName + "</a>";
         html += "</div>";
     }
     
