@@ -19,8 +19,14 @@
 - [Quick Start](#-quick-start)
 - [Hardware Requirements](#-hardware-requirements)
 - [Installation](#-installation)
+  - [As a Standalone Project](#as-a-standalone-project)
+  - [As a Library Dependency](#as-a-library-dependency)
 - [First Boot](#-first-boot)
 - [Usage](#-usage)
+  - [Web Interface](#web-interface)
+  - [URL Structure](#url-structure)
+  - [Custom Pages](#custom-pages)
+  - [REST API](#rest-api)
 - [API Documentation](#-api-documentation)
 - [Configuration](#-configuration)
 - [LED Status Indicators](#-led-status-indicators)
@@ -50,6 +56,7 @@
 - 🐕 **Watchdog Timer** - Auto-recovery from crashes
 - 📊 **Memory Monitoring** - Track heap usage and prevent leaks
 - 🔌 **CORS Enabled** - Web apps can access API cross-origin
+- 🎨 **Custom Page Handler** - Add your own web pages and APIs
 
 ### User Experience
 - 📱 **Mobile Responsive** - Works on all devices
@@ -76,7 +83,7 @@ Password: (open network)
 ```
 
 ### 3. Configure
-Open browser to: `http://192.168.4.1`
+Browser should auto-redirect to config page, or manually go to: `http://192.168.4.1/wifi`
 
 - Click "Scan for Networks"
 - Select your WiFi network
@@ -109,12 +116,14 @@ Device connects and remembers your WiFi credentials.
 
 ## 📦 Installation
 
-### Prerequisites
+### As a Standalone Project
+
+#### Prerequisites
 - [PlatformIO Core](https://platformio.org/install) or [PlatformIO IDE](https://platformio.org/platformio-ide)
 - USB cable for programming
 - ESP32-C3 development board
 
-### Method 1: PlatformIO CLI
+#### Method 1: PlatformIO CLI
 
 ```bash
 # Clone repository
@@ -131,7 +140,7 @@ pio run --target upload
 pio device monitor
 ```
 
-### Method 2: PlatformIO IDE (VS Code)
+#### Method 2: PlatformIO IDE (VS Code)
 
 1. Open project folder in VS Code
 2. PlatformIO will auto-detect `platformio.ini`
@@ -139,12 +148,51 @@ pio device monitor
 4. Click "Upload" button (→)
 5. Click "Serial Monitor" button (🔌)
 
-### Method 3: Pre-built Binary
+#### Method 3: Pre-built Binary
 
 ```bash
 # Flash pre-built binary
 esptool.py --chip esp32c3 write_flash 0x0 firmware.bin
 ```
+
+### As a Library Dependency
+
+Use EasyWiFi in your own PlatformIO project:
+
+#### From Git Repository
+Add to your `platformio.ini`:
+```ini
+[env:esp32c3]
+platform = espressif32
+board = esp32-c3-devkitm-1
+framework = arduino
+lib_deps = 
+    https://github.com/brennanMKE/EasyWiFi.git
+```
+
+#### From Local Path (Development)
+```ini
+lib_deps = 
+    file:///path/to/EasyWiFi/lib/EasyWiFi
+```
+
+Then in your code:
+```cpp
+#include <EasyWiFi.h>
+
+RunLoop runloop;
+
+void setup() {
+    Serial.begin(115200);
+    runloop.setup("MyDevice");
+}
+
+void loop() {
+    runloop.loop();
+}
+```
+
+See [CustomPages.md](Docs/CustomPages.md) for adding your own web pages.
 
 ---
 
@@ -162,8 +210,8 @@ esptool.py --chip esp32c3 write_flash 0x0 firmware.bin
 **Via AP:**
 ```
 1. Connect to: EasyWiFi-Setup-XXXXXX
-2. Open browser (may auto-redirect)
-3. If no redirect, go to: http://192.168.4.1
+2. Open browser (may auto-redirect to config page)
+3. If no redirect, go to: http://192.168.4.1/wifi
 ```
 
 **Via Serial Monitor:**
@@ -178,7 +226,9 @@ Check logs for AP SSID and IP address
 
 ### Web Interface
 
-#### Home Page
+Access the WiFi configuration at `http://192.168.4.1/wifi` (when in AP mode) or `http://device-name.local/wifi` (when connected).
+
+#### WiFi Configuration Home
 - Shows connection status
 - Device information (IP, signal strength)
 - Quick access to scan and configure
@@ -201,50 +251,97 @@ Check logs for AP SSID and IP address
 - Shows success or failure
 - Retry options on failure
 
+### URL Structure
+
+EasyWiFi uses a clean URL structure that separates your device functionality from WiFi configuration:
+
+**Your Custom Pages (root level - primary functionality):**
+- `/` - Your device home page
+- `/control`, `/settings`, etc. - Your custom pages
+- `/api/mydevice/*` - Your custom APIs
+
+**WiFi Configuration (under /wifi - supporting service):**
+- `/wifi` - WiFi configuration home
+- `/wifi/scan`, `/wifi/credentials` - WiFi web pages
+- `/wifi/api/*` - WiFi REST API endpoints
+
+This design puts your device's main features at the root URL, making WiFi configuration a supporting service rather than the primary interface.
+
+### Custom Pages
+
+Add your own web pages and functionality at the root URL (`/`). See [CustomPages.md](Docs/CustomPages.md) for detailed guide.
+
+**Quick Example:**
+```cpp
+#include <EasyWiFi.h>
+#include <CustomPageHandler.h>
+
+class MyPages : public CustomPageHandler {
+public:
+    MyPages(ConfigServer& cs) : configServer(cs) {}
+    
+    void registerRoutes() override {
+        WebServer& server = configServer.getServer();
+        server.on("/", HTTP_GET, [this]() { handleHome(); });
+    }
+    
+private:
+    ConfigServer& configServer;
+    void handleHome() {
+        String html = webPages->getHTMLHeader("My Device");
+        html += "<h1>Welcome!</h1>";
+        html += "<a href='/wifi' class='button'>WiFi Setup</a>";
+        html += webPages->getHTMLFooter();
+        configServer.getServer().send(200, "text/html", html);
+    }
+};
+```
+
 ### REST API
 
-See [API.md](API.md) for complete documentation.
+See [API.md](Docs/API.md) for complete documentation.
 
 #### Quick Examples
 
 **Get Status:**
 ```bash
-curl http://192.168.4.1/api/status
+curl http://192.168.4.1/wifi/api/status
 ```
 
 **Scan Networks:**
 ```bash
-curl http://192.168.4.1/api/scan
+curl http://192.168.4.1/wifi/api/scan
 ```
 
 **Configure WiFi:**
 ```bash
-curl -X POST http://192.168.4.1/api/configure \
+curl -X POST http://192.168.4.1/wifi/api/configure \
   -d "ssid=MyNetwork" \
   -d "password=MyPassword123"
 ```
 
 **Clear Credentials:**
 ```bash
-curl -X DELETE http://192.168.4.1/api/credentials
+curl -X DELETE http://192.168.4.1/wifi/api/credentials
 ```
 
 ---
 
 ## 📡 API Documentation
 
-Full REST API documentation available in [API.md](API.md)
+Full REST API documentation available in [Docs/API.md](Docs/API.md)
 
 ### Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/status` | GET | Device and WiFi status |
-| `/api/scan` | GET | Scan WiFi networks |
-| `/api/configure` | POST | Save WiFi credentials |
-| `/api/connect` | POST | Initiate connection |
-| `/api/credentials` | DELETE | Clear credentials |
-| `/api/reset` | GET | Factory reset + reboot |
+| `/wifi/api/status` | GET | Device and WiFi status |
+| `/wifi/api/scan` | GET | Scan WiFi networks |
+| `/wifi/api/configure` | POST | Save WiFi credentials |
+| `/wifi/api/connect` | POST | Initiate connection |
+| `/wifi/api/credentials` | DELETE | Clear credentials |
+| `/wifi/api/reset` | GET | Factory reset + reboot |
+| `/wifi/api/health` | GET | System health check |
 
 ### Language Examples
 - ✅ curl (bash)
@@ -352,7 +449,7 @@ Slow Blink → Fast Blink → Heartbeat
 **Symptoms:** No auto-redirect after connecting
 
 **Solutions:**
-1. Manually go to: `http://192.168.4.1`
+1. Manually go to: `http://192.168.4.1/wifi`
 2. Disable mobile data on phone
 3. Check browser isn't cached
 4. Try incognito/private mode
@@ -374,7 +471,7 @@ Slow Blink → Fast Blink → Heartbeat
 
 **Solutions:**
 1. Verify connected to device AP
-2. Check IP address: `http://192.168.4.1`
+2. Go to WiFi config: `http://192.168.4.1/wifi`
 3. Clear browser cache
 4. Try different browser
 5. Check firewall settings
@@ -421,10 +518,11 @@ Slow Blink → Fast Blink → Heartbeat
 │       │                                │
 │       ├──▶ ┌────────────────┐         │
 │       │    │ ConfigServer   │         │
-│       │    │ - Web UI       │         │
-│       │    │ - REST API     │         │
-│       │    │ - CORS         │         │
-│       │    └────────────────┘         │
+│       │    │ - WiFi UI      │         │
+│       │    │ - WiFi API     │         │
+│       │    │ - Custom Pages │◀────────┼─ Your Custom
+│       │    │ - CORS         │         │  PageHandler
+│       │    └────────────────┘         │  (optional)
 │       │                                │
 │       ├──▶ ┌────────────────┐         │
 │       │    │ Storage        │         │
@@ -432,10 +530,16 @@ Slow Blink → Fast Blink → Heartbeat
 │       │    │ - Credentials  │         │
 │       │    └────────────────┘         │
 │       │                                │
+│       ├──▶ ┌────────────────┐         │
+│       │    │ StatusLED      │         │
+│       │    │ - Patterns     │         │
+│       │    │ - Brightness   │         │
+│       │    └────────────────┘         │
+│       │                                │
 │       └──▶ ┌────────────────┐         │
-│            │ StatusLED      │         │
-│            │ - Patterns     │         │
-│            │ - Brightness   │         │
+│            │ ErrorHandler   │         │
+│            │ - Recovery     │         │
+│            │ - Logging      │         │
 │            └────────────────┘         │
 │                                         │
 └─────────────────────────────────────────┘
@@ -475,7 +579,9 @@ Slow Blink → Fast Blink → Heartbeat
 ```
 EasyWiFi/
 ├── src/
-│   └── main.cpp              # Application entry point
+│   ├── main.cpp              # Application entry point
+│   ├── LanternsPages.h/cpp   # Example custom pages
+│   └── (your custom pages)   # Your device-specific code
 ├── lib/
 │   └── EasyWiFi/
 │       ├── EasyWiFi.h        # Main include
@@ -485,13 +591,18 @@ EasyWiFi/
 │       ├── WebPages.h/cpp    # HTML templates
 │       ├── Storage.h/cpp     # NVS storage
 │       ├── StatusLED.h/cpp   # LED control
+│       ├── ErrorHandler.h/cpp# Error handling
+│       ├── CustomPageHandler.h # Custom page interface
 │       ├── Macros.h          # Constants
 │       └── library.json      # Library manifest
+├── Docs/
+│   ├── API.md                # REST API docs
+│   ├── CustomPages.md        # Custom pages guide
+│   ├── PRD.md                # Product requirements
+│   ├── Security.md           # Security considerations
+│   └── Troubleshooting.md    # Troubleshooting guide
 ├── platformio.ini            # Build configuration
-├── README.md                 # This file
-├── API.md                    # REST API docs
-├── PRD.md                    # Product requirements
-└── Task.md                   # Implementation tasks
+└── README.md                 # This file
 ```
 
 ---
@@ -617,7 +728,7 @@ SOFTWARE.
 
 ## 📞 Support
 
-- **Documentation:** Check README.md, API.md, and PRD.md
+- **Documentation:** Check README.md, Docs/API.md, Docs/CustomPages.md, and Docs/PRD.md
 - **Issues:** Open GitHub issue with logs
 - **Serial Logs:** Include output from serial monitor
 - **Hardware:** Specify your ESP32-C3 board model
