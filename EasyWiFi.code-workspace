@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "EasyWiFi (library)",
+      "path": "."
+    },
+    {
+      "name": "Lantern example",
+      "path": "examples/Lantern"
+    }
+  ],
+  "settings": {}
+}
