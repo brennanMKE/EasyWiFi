@@ -160,20 +160,23 @@ esptool.py --chip esp32c3 write_flash 0x0 firmware.bin
 Use EasyWiFi in your own PlatformIO project:
 
 #### From Git Repository
-Add to your `platformio.ini`:
+Add to your `platformio.ini`. Pin to a release tag so builds are reproducible:
 ```ini
 [env:esp32c3]
 platform = espressif32
 board = esp32-c3-devkitm-1
 framework = arduino
 lib_deps = 
-    https://github.com/brennanMKE/EasyWiFi.git
+    https://github.com/brennanMKE/EasyWiFi.git#v0.2.0
 ```
+Omit the `#v0.2.0` suffix to track the default branch instead. PlatformIO finds
+`library.json` and `EasyWiFi.h` at the repository root — no subdirectory path is needed.
 
 #### From Local Path (Development)
+Point at the repository root (the library now lives at the root, not under `lib/`):
 ```ini
 lib_deps = 
-    file:///path/to/EasyWiFi/lib/EasyWiFi
+    file:///path/to/EasyWiFi
 ```
 
 Then in your code:
@@ -192,7 +195,15 @@ void loop() {
 }
 ```
 
-See [CustomPages.md](Docs/CustomPages.md) for adding your own web pages.
+A complete demo lives in [`examples/Lantern`](examples/Lantern). See
+[CustomPages.md](Docs/CustomPages.md) for adding your own web pages.
+
+#### Reserved macro names
+EasyWiFi's compile-time configuration macros are exposed through `<EasyWiFi.h>`
+(via `Macros.h`). As of v0.2.0 they are all prefixed with `EWIFI_` to avoid
+colliding with your own code — for example `EWIFI_NVS_NAMESPACE`,
+`EWIFI_AP_SSID_PREFIX`, `EWIFI_LED_PIN`, `EWIFI_ENDPOINT_ROOT`, and the logging
+tags `EWIFI_TAG_*`. Treat the `EWIFI_` prefix as reserved.
 
 ---
 

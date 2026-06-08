@@ -6,6 +6,7 @@
 #include "RunLoop.h"
 #include "WiFiManager.h"
 #include "ConfigServer.h"
+#include "CustomPageHandler.h"
 #include "Storage.h"
 #include "WebPages.h"
 #include "StatusLED.h"

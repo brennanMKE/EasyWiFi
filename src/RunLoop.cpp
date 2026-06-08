@@ -2,16 +2,16 @@
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
 
-static const char *TAG = TAG_RUNLOOP;
+static const char *TAG = EWIFI_TAG_RUNLOOP;
 
-// Watchdog timeout in seconds (must be longer than WIFI_CONNECTION_TIMEOUT)
+// Watchdog timeout in seconds (must be longer than EWIFI_WIFI_CONNECTION_TIMEOUT)
 #define WDT_TIMEOUT 60
 
 RunLoop::RunLoop() : 
     storage(),
     wifiManager(),
     configServer(wifiManager, storage),
-    statusLED(LED_ENABLED ? LED_PIN : -1),
+    statusLED(EWIFI_LED_ENABLED ? EWIFI_LED_PIN : -1),
     currentState(INITIALIZING),
     stateStartTime(0),
     lastStatusLog(0),
@@ -47,7 +47,7 @@ void RunLoop::setup(const String& name) {
     // Initialize status LED
     statusLED.begin();
     if (statusLED.isEnabled()) {
-        statusLED.setBrightness(LED_BRIGHTNESS);
+        statusLED.setBrightness(EWIFI_LED_BRIGHTNESS);
     }
     
     // Wire up RunLoop reference and device name to ConfigServer
@@ -87,7 +87,7 @@ void RunLoop::loop() {
     wifiManager.processCaptivePortal();
     
     // Periodic status logging (configurable interval)
-    if (millis() - lastStatusLog > STATUS_LOG_INTERVAL) {
+    if (millis() - lastStatusLog > EWIFI_STATUS_LOG_INTERVAL) {
         logStatus();
         lastStatusLog = millis();
     }
@@ -151,7 +151,7 @@ void RunLoop::handleConnecting() {
     esp_task_wdt_reset();
     
     ESP_LOGI(TAG, "Attempting to connect to WiFi (attempt %d of %d)...", 
-             connectionAttempts + 1, WIFI_CONNECTION_ATTEMPTS);
+             connectionAttempts + 1, EWIFI_WIFI_CONNECTION_ATTEMPTS);
     statusLED.setPattern(LED_FAST_BLINK);
     connectionFailed = false;
     
@@ -180,16 +180,16 @@ void RunLoop::handleConnecting() {
         consecutiveFailures++;
         
         ESP_LOGE(TAG, "✗ Failed to connect (attempt %d/%d, total failures: %d)", 
-                 connectionAttempts, WIFI_CONNECTION_ATTEMPTS, consecutiveFailures);
+                 connectionAttempts, EWIFI_WIFI_CONNECTION_ATTEMPTS, consecutiveFailures);
         
-        if (connectionAttempts >= WIFI_CONNECTION_ATTEMPTS) {
+        if (connectionAttempts >= EWIFI_WIFI_CONNECTION_ATTEMPTS) {
             ESP_LOGW(TAG, "Giving up after %d attempts.", connectionAttempts);
             connectionFailed = true;
             connectionAttempts = 0;
             lastConnectionAttemptTime = millis();
             
             // Check if we should try recovery or go straight to AP mode
-            if (consecutiveFailures >= MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
+            if (consecutiveFailures >= EWIFI_MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
                 ESP_LOGE(TAG, "Too many consecutive failures - entering AP mode");
                 transitionToState(AP_MODE);
             } else {
@@ -313,7 +313,7 @@ void RunLoop::handleAPMode() {
 void RunLoop::handleError() {
     // Rate limiting to prevent tight loops - CRITICAL FIX
     unsigned long now = millis();
-    if (now - lastErrorHandleTime < ERROR_HANDLE_RATE_LIMIT_MS) {
+    if (now - lastErrorHandleTime < EWIFI_ERROR_HANDLE_RATE_LIMIT_MS) {
         esp_task_wdt_reset();
         yield();
         return;
@@ -337,10 +337,10 @@ void RunLoop::handleError() {
     }
     
     // Check for unrecoverable error: All networks not found (NO_AP_FOUND)
-    // If FORCE_AP_ON_NO_NETWORKS is enabled and this is SSID_NOT_FOUND, transition to AP mode
-    if (FORCE_AP_ON_NO_NETWORKS && 
+    // If EWIFI_FORCE_AP_ON_NO_NETWORKS is enabled and this is SSID_NOT_FOUND, transition to AP mode
+    if (EWIFI_FORCE_AP_ON_NO_NETWORKS && 
         lastWiFiError.code == (uint32_t)WiFiError::SSID_NOT_FOUND) {
-        if (errorRecoveryAttempts >= MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
+        if (errorRecoveryAttempts >= EWIFI_MAX_CONSECUTIVE_ERRORS_BEFORE_AP) {
             ESP_LOGW(TAG, "All configured networks not found (NO_AP_FOUND) - transitioning to AP mode");
             ESP_LOGI(TAG, "User can connect to AP to reconfigure networks");
             transitionToState(AP_MODE);
@@ -350,9 +350,9 @@ void RunLoop::handleError() {
         }
     }
     
-    // Give up after MAX_RECOVERY_ATTEMPTS or ERROR_RECOVERY_TIMEOUT
-    if (errorRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS || 
-        (millis() - errorStateEnteredTime) > ERROR_RECOVERY_TIMEOUT) {
+    // Give up after EWIFI_MAX_RECOVERY_ATTEMPTS or EWIFI_ERROR_RECOVERY_TIMEOUT
+    if (errorRecoveryAttempts >= EWIFI_MAX_RECOVERY_ATTEMPTS || 
+        (millis() - errorStateEnteredTime) > EWIFI_ERROR_RECOVERY_TIMEOUT) {
         ESP_LOGE(TAG, "Max recovery attempts reached or timeout - entering safe mode (AP)");
         transitionToState(AP_MODE);
         errorStateInitialized = false;
@@ -362,7 +362,7 @@ void RunLoop::handleError() {
     
     // Wait between recovery attempts (exponential backoff)
     static unsigned long lastRecoveryAttempt = 0;
-    unsigned long backoffDelay = RETRY_BACKOFF_BASE_MS * (1 << errorRecoveryAttempts);  // 5s, 10s, 20s, 40s, 80s
+    unsigned long backoffDelay = EWIFI_RETRY_BACKOFF_BASE_MS * (1 << errorRecoveryAttempts);  // 5s, 10s, 20s, 40s, 80s
     if (backoffDelay > 60000) backoffDelay = 60000;  // Cap at 60 seconds
     
     if (millis() - lastRecoveryAttempt < backoffDelay) {
@@ -378,7 +378,7 @@ void RunLoop::handleError() {
     // Determine and apply recovery strategy
     RecoveryStrategy strategy = determineRecoveryStrategy();
     ESP_LOGI(TAG, "Attempting recovery strategy: %d (attempt %d/%d)", 
-             strategy, errorRecoveryAttempts, MAX_RECOVERY_ATTEMPTS);
+             strategy, errorRecoveryAttempts, EWIFI_MAX_RECOVERY_ATTEMPTS);
     
     if (attemptRecovery(strategy)) {
         ESP_LOGI(TAG, "Recovery successful!");
@@ -467,7 +467,7 @@ void RunLoop::logStatus() {
     }
     
     // Warn if memory is running low
-    if (freeHeap < MEMORY_WARNING_THRESHOLD) {
+    if (freeHeap < EWIFI_MEMORY_WARNING_THRESHOLD) {
         ESP_LOGW(TAG, "!!! LOW MEMORY WARNING: Only %d bytes free !!!", freeHeap);
     }
     

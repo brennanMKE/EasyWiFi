@@ -3,7 +3,7 @@
 #include <esp_log.h>
 #include "LanternsPages.h"
 
-static const char *TAG = TAG_MAIN;
+static const char *TAG = EWIFI_TAG_MAIN;
 
 RunLoop runloop;
 LanternsPages* lanternsPages = nullptr;
@@ -15,7 +15,7 @@ void setup() {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     
     ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "EasyWiFi v0.1.0");
+    ESP_LOGI(TAG, "EasyWiFi v0.2.0");
     ESP_LOGI(TAG, "ESP32-C3 WiFi Configuration System");
     ESP_LOGI(TAG, "========================================");
     

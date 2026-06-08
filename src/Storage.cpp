@@ -1,16 +1,16 @@
 #include "Storage.h"
 #include <esp_log.h>
 
-static const char *TAG = TAG_STORAGE;
+static const char *TAG = EWIFI_TAG_STORAGE;
 
-Storage::Storage() : errorHandler(TAG_STORAGE) {
+Storage::Storage() : errorHandler(EWIFI_TAG_STORAGE) {
     // Constructor
 }
 
 StorageError Storage::beginEx(ErrorContext* outError) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     
-    bool success = preferences.begin(NVS_NAMESPACE, false); // false = read/write mode
+    bool success = preferences.begin(EWIFI_NVS_NAMESPACE, false); // false = read/write mode
     if (success) {
         ESP_LOGI(TAG, "NVS storage initialized");
         errorHandler.recordRecovery();
@@ -94,7 +94,7 @@ StorageError Storage::saveCredentialsEx(const String& ssid, const String& passwo
     
     // Add new credential if not found
     if (!found) {
-        if (credentials.size() >= MAX_STORED_NETWORKS) {
+        if (credentials.size() >= EWIFI_MAX_STORED_NETWORKS) {
             ESP_LOGW(TAG, "Maximum credentials reached, removing oldest");
             credentials.erase(credentials.begin()); // Remove oldest (first)
         }
@@ -117,8 +117,8 @@ StorageError Storage::saveCredentialsEx(const String& ssid, const String& passwo
     }
     
     // Save count
-    preferences.putInt(NVS_KEY_COUNT, credentials.size());
-    preferences.putBool(NVS_KEY_CONFIGURED, true);
+    preferences.putInt(EWIFI_NVS_KEY_COUNT, credentials.size());
+    preferences.putBool(EWIFI_NVS_KEY_CONFIGURED, true);
     
     ESP_LOGI(TAG, "✓ Saved %d credential(s) to NVS", credentials.size());
     errorHandler.recordRecovery();
@@ -133,7 +133,7 @@ bool Storage::saveCredentials(const String& ssid, const String& password) {
 StorageError Storage::loadCredentialsEx(std::vector<WiFiCredential>& credentials, ErrorContext* outError) {
     credentials.clear();
     
-    int count = preferences.getInt(NVS_KEY_COUNT, 0);
+    int count = preferences.getInt(EWIFI_NVS_KEY_COUNT, 0);
     ESP_LOGI(TAG, "Loading %d credential(s) from NVS", count);
     
     if (count == 0) {
@@ -144,7 +144,7 @@ StorageError Storage::loadCredentialsEx(std::vector<WiFiCredential>& credentials
         return StorageError::CREDENTIALS_NOT_FOUND;
     }
     
-    for (int i = 0; i < count && i < MAX_STORED_NETWORKS; i++) {
+    for (int i = 0; i < count && i < EWIFI_MAX_STORED_NETWORKS; i++) {
         String ssidKey = getSSIDKey(i);
         String passKey = getPasswordKey(i);
         
@@ -187,8 +187,8 @@ bool Storage::clearCredentials() {
 }
 
 bool Storage::isConfigured() {
-    bool configured = preferences.getBool(NVS_KEY_CONFIGURED, false);
-    int count = preferences.getInt(NVS_KEY_COUNT, 0);
+    bool configured = preferences.getBool(EWIFI_NVS_KEY_CONFIGURED, false);
+    int count = preferences.getInt(EWIFI_NVS_KEY_COUNT, 0);
     
     bool result = configured && (count > 0);
     ESP_LOGV(TAG, "isConfigured: %s (configured=%d, count=%d)", 
@@ -198,15 +198,15 @@ bool Storage::isConfigured() {
 }
 
 int Storage::getCredentialCount() {
-    return preferences.getInt(NVS_KEY_COUNT, 0);
+    return preferences.getInt(EWIFI_NVS_KEY_COUNT, 0);
 }
 
 String Storage::getSSIDKey(int index) {
-    return String(NVS_KEY_SSID_PREFIX) + String(index);
+    return String(EWIFI_NVS_KEY_SSID_PREFIX) + String(index);
 }
 
 String Storage::getPasswordKey(int index) {
-    return String(NVS_KEY_PASS_PREFIX) + String(index);
+    return String(EWIFI_NVS_KEY_PASS_PREFIX) + String(index);
 }
 
 bool Storage::deleteCredential(const String& ssid) {
@@ -237,8 +237,8 @@ bool Storage::deleteCredential(const String& ssid) {
         preferences.putString(passKey.c_str(), credentials[i].password);
     }
     
-    preferences.putInt(NVS_KEY_COUNT, credentials.size());
-    preferences.putBool(NVS_KEY_CONFIGURED, credentials.size() > 0);
+    preferences.putInt(EWIFI_NVS_KEY_COUNT, credentials.size());
+    preferences.putBool(EWIFI_NVS_KEY_CONFIGURED, credentials.size() > 0);
     
     ESP_LOGI(TAG, "Remaining credentials: %d", credentials.size());
     return true;
@@ -300,7 +300,7 @@ bool Storage::moveCredentialToFirst(const String& ssid) {
         preferences.putString(passKey.c_str(), credentials[i].password);
     }
     
-    preferences.putInt(NVS_KEY_COUNT, credentials.size());
+    preferences.putInt(EWIFI_NVS_KEY_COUNT, credentials.size());
     
     ESP_LOGI(TAG, "Moved '%s' to first priority", ssid.c_str());
     return true;

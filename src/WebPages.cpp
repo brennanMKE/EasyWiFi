@@ -1,7 +1,7 @@
 #include "WebPages.h"
 #include <esp_log.h>
 
-static const char *TAG = TAG_WEB_PAGES;
+static const char *TAG = EWIFI_TAG_WEB_PAGES;
 
 WebPages::WebPages() : deviceName("EasyWiFi") {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
@@ -388,7 +388,7 @@ String WebPages::generateCredentialsPage(Storage& storage, const String& current
         html += "</div>";
     } else {
         html += "<p style='color:#666;margin-bottom:16px;'>";
-        html += String(ssidList.size()) + " of " + String(MAX_STORED_NETWORKS) + " networks stored";
+        html += String(ssidList.size()) + " of " + String(EWIFI_MAX_STORED_NETWORKS) + " networks stored";
         html += "</p>";
         
         html += "<div class='network-list'>";
@@ -448,10 +448,10 @@ String WebPages::generateCredentialsPage(Storage& storage, const String& current
         html += "</div>";
         
         html += "<div class='button-group'>";
-        if (ssidList.size() < MAX_STORED_NETWORKS) {
+        if (ssidList.size() < EWIFI_MAX_STORED_NETWORKS) {
             html += "<a href='/wifi/scan' class='button small primary'>Add Network</a>";
         } else {
-            html += "<p style='color:#999;font-size:14px;margin:8px 0;'>Maximum " + String(MAX_STORED_NETWORKS) + " networks stored</p>";
+            html += "<p style='color:#999;font-size:14px;margin:8px 0;'>Maximum " + String(EWIFI_MAX_STORED_NETWORKS) + " networks stored</p>";
         }
         html += "<a href='/wifi' class='button small'>Home</a>";
         html += "</div>";

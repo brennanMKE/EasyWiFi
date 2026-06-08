@@ -4,11 +4,11 @@
 #include <esp_log.h>
 #include <ArduinoJson.h>
 
-static const char *TAG = TAG_CONFIG_SERVER;
+static const char *TAG = EWIFI_TAG_CONFIG_SERVER;
 
 ConfigServer::ConfigServer(WiFiManager& wifiManager, Storage& storage) 
     : deviceName("EasyWiFi"),
-      server(WEB_SERVER_PORT), 
+      server(EWIFI_WEB_SERVER_PORT), 
       wifiManager(wifiManager), 
       storage(storage),
       webPages(),
@@ -60,34 +60,34 @@ void ConfigServer::enableCORS() {
 }
 
 void ConfigServer::setup() {
-    ESP_LOGI(TAG, "Setting up web server on port %d", WEB_SERVER_PORT);
+    ESP_LOGI(TAG, "Setting up web server on port %d", EWIFI_WEB_SERVER_PORT);
     
     // Web UI routes
-    server.on(ENDPOINT_ROOT, HTTP_GET, std::bind(&ConfigServer::handleRoot, this));
-    server.on(ENDPOINT_SCAN, HTTP_GET, std::bind(&ConfigServer::handleScan, this));
-    server.on(ENDPOINT_CONFIGURE, HTTP_GET, std::bind(&ConfigServer::handleConfigure, this));
-    server.on(ENDPOINT_SAVE, HTTP_POST, std::bind(&ConfigServer::handleSave, this));
-    server.on(ENDPOINT_STATUS, HTTP_GET, std::bind(&ConfigServer::handleStatus, this));
-    server.on(ENDPOINT_RESET, HTTP_GET, std::bind(&ConfigServer::handleReset, this));
-    server.on(ENDPOINT_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleCredentials, this));
+    server.on(EWIFI_ENDPOINT_ROOT, HTTP_GET, std::bind(&ConfigServer::handleRoot, this));
+    server.on(EWIFI_ENDPOINT_SCAN, HTTP_GET, std::bind(&ConfigServer::handleScan, this));
+    server.on(EWIFI_ENDPOINT_CONFIGURE, HTTP_GET, std::bind(&ConfigServer::handleConfigure, this));
+    server.on(EWIFI_ENDPOINT_SAVE, HTTP_POST, std::bind(&ConfigServer::handleSave, this));
+    server.on(EWIFI_ENDPOINT_STATUS, HTTP_GET, std::bind(&ConfigServer::handleStatus, this));
+    server.on(EWIFI_ENDPOINT_RESET, HTTP_GET, std::bind(&ConfigServer::handleReset, this));
+    server.on(EWIFI_ENDPOINT_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleCredentials, this));
     
     // REST API routes
-    server.on(ENDPOINT_API_STATUS, HTTP_GET, std::bind(&ConfigServer::handleAPIStatus, this));
-    server.on(ENDPOINT_API_SCAN, HTTP_GET, std::bind(&ConfigServer::handleAPIScan, this));
-    server.on(ENDPOINT_API_CONFIGURE, HTTP_POST, std::bind(&ConfigServer::handleAPIConfigure, this));
-    server.on(ENDPOINT_API_CONNECT, HTTP_POST, std::bind(&ConfigServer::handleAPIConnect, this));
-    server.on(ENDPOINT_API_CREDENTIALS, HTTP_DELETE, std::bind(&ConfigServer::handleAPICredentials, this));
-    server.on(ENDPOINT_API_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleAPICredentialsDelete, this));
-    server.on(ENDPOINT_API_RESET, HTTP_GET, std::bind(&ConfigServer::handleAPIReset, this));
-    server.on(ENDPOINT_API_HEALTH, HTTP_GET, std::bind(&ConfigServer::handleAPIHealth, this));
+    server.on(EWIFI_ENDPOINT_API_STATUS, HTTP_GET, std::bind(&ConfigServer::handleAPIStatus, this));
+    server.on(EWIFI_ENDPOINT_API_SCAN, HTTP_GET, std::bind(&ConfigServer::handleAPIScan, this));
+    server.on(EWIFI_ENDPOINT_API_CONFIGURE, HTTP_POST, std::bind(&ConfigServer::handleAPIConfigure, this));
+    server.on(EWIFI_ENDPOINT_API_CONNECT, HTTP_POST, std::bind(&ConfigServer::handleAPIConnect, this));
+    server.on(EWIFI_ENDPOINT_API_CREDENTIALS, HTTP_DELETE, std::bind(&ConfigServer::handleAPICredentials, this));
+    server.on(EWIFI_ENDPOINT_API_CREDENTIALS, HTTP_GET, std::bind(&ConfigServer::handleAPICredentialsDelete, this));
+    server.on(EWIFI_ENDPOINT_API_RESET, HTTP_GET, std::bind(&ConfigServer::handleAPIReset, this));
+    server.on(EWIFI_ENDPOINT_API_HEALTH, HTTP_GET, std::bind(&ConfigServer::handleAPIHealth, this));
     
     // CORS preflight handler
-    server.on(ENDPOINT_API_STATUS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
-    server.on(ENDPOINT_API_SCAN, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
-    server.on(ENDPOINT_API_CONFIGURE, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
-    server.on(ENDPOINT_API_CONNECT, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
-    server.on(ENDPOINT_API_CREDENTIALS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
-    server.on(ENDPOINT_API_RESET, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_STATUS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_SCAN, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_CONFIGURE, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_CONNECT, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_CREDENTIALS, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
+    server.on(EWIFI_ENDPOINT_API_RESET, HTTP_OPTIONS, std::bind(&ConfigServer::handleOptions, this));
     
     // 404 handler
     server.onNotFound(std::bind(&ConfigServer::handleNotFound, this));
@@ -127,9 +127,9 @@ bool ConfigServer::isEnabled() {
 // ==================== Web UI Handlers ====================
 
 void ConfigServer::handleRoot() {
-    ESP_LOGD(TAG, "Request: GET %s", ENDPOINT_ROOT);
+    ESP_LOGD(TAG, "Request: GET %s", EWIFI_ENDPOINT_ROOT);
     String html = webPages.generateHomePage(wifiManager, storage);
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
 }
 
 void ConfigServer::handleScan() {
@@ -143,19 +143,19 @@ void ConfigServer::handleScan() {
     }
     
     String html = webPages.generateScanPage(networks, success);
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
 }
 
 void ConfigServer::handleConfigure() {
-    ESP_LOGD(TAG, "Request: GET %s", ENDPOINT_CONFIGURE);
+    ESP_LOGD(TAG, "Request: GET %s", EWIFI_ENDPOINT_CONFIGURE);
     
     String ssid = server.arg("ssid");
     String html = webPages.generateConfigPage(ssid);
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
 }
 
 void ConfigServer::handleSave() {
-    ESP_LOGI(TAG, "Request: POST %s", ENDPOINT_SAVE);
+    ESP_LOGI(TAG, "Request: POST %s", EWIFI_ENDPOINT_SAVE);
     
     String ssid = urlDecode(server.arg("ssid"));
     String password = urlDecode(server.arg("password"));
@@ -164,7 +164,7 @@ void ConfigServer::handleSave() {
     
     if (ssid.length() == 0) {
         String html = webPages.generateErrorPage("SSID cannot be empty");
-        sendHTML(HTTP_STATUS_BAD_REQUEST, html);
+        sendHTML(EWIFI_HTTP_STATUS_BAD_REQUEST, html);
         return;
     }
     
@@ -173,7 +173,7 @@ void ConfigServer::handleSave() {
     
     if (!saved) {
         String html = webPages.generateErrorPage("Failed to save credentials");
-        sendHTML(HTTP_STATUS_SERVER_ERROR, html);
+        sendHTML(EWIFI_HTTP_STATUS_SERVER_ERROR, html);
         return;
     }
     
@@ -183,25 +183,25 @@ void ConfigServer::handleSave() {
     }
     
     // Redirect to status page
-    server.sendHeader("Location", ENDPOINT_STATUS);
-    server.send(HTTP_STATUS_REDIRECT, "text/plain", "Redirecting...");
+    server.sendHeader("Location", EWIFI_ENDPOINT_STATUS);
+    server.send(EWIFI_HTTP_STATUS_REDIRECT, "text/plain", "Redirecting...");
 }
 
 void ConfigServer::handleStatus() {
-    ESP_LOGD(TAG, "Request: GET %s", ENDPOINT_STATUS);
+    ESP_LOGD(TAG, "Request: GET %s", EWIFI_ENDPOINT_STATUS);
     
     String html = webPages.generateStatusPage(wifiManager);
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
 }
 
 void ConfigServer::handleReset() {
-    ESP_LOGI(TAG, "Request: GET %s", ENDPOINT_RESET);
+    ESP_LOGI(TAG, "Request: GET %s", EWIFI_ENDPOINT_RESET);
     
     ESP_LOGW(TAG, "Factory reset requested");
     storage.clearCredentials();
     
     String html = webPages.generateResetPage();
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
     
     // Reboot after 2 seconds (non-blocking wait to allow response to send)
     unsigned long rebootTime = millis();
@@ -214,7 +214,7 @@ void ConfigServer::handleReset() {
 // ==================== REST API Handlers ====================
 
 void ConfigServer::handleAPIStatus() {
-    ESP_LOGD(TAG, "API: GET %s", ENDPOINT_API_STATUS);
+    ESP_LOGD(TAG, "API: GET %s", EWIFI_ENDPOINT_API_STATUS);
     
     enableCORS();
     
@@ -257,7 +257,7 @@ void ConfigServer::handleAPIStatus() {
     json += "}";
     json += "}";
     
-    sendJSON(HTTP_STATUS_OK, json);
+    sendJSON(EWIFI_HTTP_STATUS_OK, json);
 }
 
 void ConfigServer::handleAPIScan() {
@@ -274,7 +274,7 @@ void ConfigServer::handleAPIScan() {
         errorJson += "\"error\":\"WiFi scan failed\",";
         errorJson += "\"message\":\"Unable to scan for WiFi networks. Please try again.\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_SERVER_ERROR, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_SERVER_ERROR, errorJson);
         return;
     }
     
@@ -298,11 +298,11 @@ void ConfigServer::handleAPIScan() {
     json += "]";
     json += "}";
     
-    sendJSON(HTTP_STATUS_OK, json);
+    sendJSON(EWIFI_HTTP_STATUS_OK, json);
 }
 
 void ConfigServer::handleAPIConfigure() {
-    ESP_LOGI(TAG, "Request: POST %s", ENDPOINT_API_CONFIGURE);
+    ESP_LOGI(TAG, "Request: POST %s", EWIFI_ENDPOINT_API_CONFIGURE);
     
     enableCORS();
     
@@ -316,7 +316,7 @@ void ConfigServer::handleAPIConfigure() {
         errorJson += "\"error\":\"validation_error\",";
         errorJson += "\"message\":\"SSID is required\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_BAD_REQUEST, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_BAD_REQUEST, errorJson);
         return;
     }
     
@@ -326,7 +326,7 @@ void ConfigServer::handleAPIConfigure() {
         errorJson += "\"error\":\"validation_error\",";
         errorJson += "\"message\":\"SSID must be 32 characters or less\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_BAD_REQUEST, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_BAD_REQUEST, errorJson);
         return;
     }
     
@@ -337,7 +337,7 @@ void ConfigServer::handleAPIConfigure() {
         errorJson += "\"error\":\"validation_error\",";
         errorJson += "\"message\":\"Password must be at least 8 characters for WPA/WPA2\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_BAD_REQUEST, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_BAD_REQUEST, errorJson);
         return;
     }
     
@@ -347,7 +347,7 @@ void ConfigServer::handleAPIConfigure() {
         errorJson += "\"error\":\"validation_error\",";
         errorJson += "\"message\":\"Password must be 63 characters or less\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_BAD_REQUEST, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_BAD_REQUEST, errorJson);
         return;
     }
     
@@ -360,19 +360,19 @@ void ConfigServer::handleAPIConfigure() {
         successJson += "\"ssid\":\"" + ssid + "\",";
         successJson += "\"next_step\":\"Device will attempt to connect\"";
         successJson += "}";
-        sendJSON(HTTP_STATUS_OK, successJson);
+        sendJSON(EWIFI_HTTP_STATUS_OK, successJson);
     } else {
         String errorJson = "{";
         errorJson += "\"success\":false,";
         errorJson += "\"error\":\"storage_error\",";
         errorJson += "\"message\":\"Failed to save credentials to storage\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_SERVER_ERROR, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_SERVER_ERROR, errorJson);
     }
 }
 
 void ConfigServer::handleAPIConnect() {
-    ESP_LOGI(TAG, "Request: POST %s", ENDPOINT_API_CONNECT);
+    ESP_LOGI(TAG, "Request: POST %s", EWIFI_ENDPOINT_API_CONNECT);
     
     enableCORS();
     
@@ -382,7 +382,7 @@ void ConfigServer::handleAPIConnect() {
         errorJson += "\"error\":\"no_credentials\",";
         errorJson += "\"message\":\"No WiFi credentials configured\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_BAD_REQUEST, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_BAD_REQUEST, errorJson);
         return;
     }
     
@@ -392,11 +392,11 @@ void ConfigServer::handleAPIConnect() {
     json += "\"note\":\"Device will attempt to connect to configured network\"";
     json += "}";
     
-    sendJSON(HTTP_STATUS_OK, json);
+    sendJSON(EWIFI_HTTP_STATUS_OK, json);
 }
 
 void ConfigServer::handleAPICredentials() {
-    ESP_LOGI(TAG, "Request: DELETE %s", ENDPOINT_API_CREDENTIALS);
+    ESP_LOGI(TAG, "Request: DELETE %s", EWIFI_ENDPOINT_API_CREDENTIALS);
     
     enableCORS();
     
@@ -409,19 +409,19 @@ void ConfigServer::handleAPICredentials() {
         json += "\"message\":\"All WiFi credentials cleared\",";
         json += "\"cleared_count\":" + String(count);
         json += "}";
-        sendJSON(HTTP_STATUS_OK, json);
+        sendJSON(EWIFI_HTTP_STATUS_OK, json);
     } else {
         String errorJson = "{";
         errorJson += "\"success\":false,";
         errorJson += "\"error\":\"storage_error\",";
         errorJson += "\"message\":\"Failed to clear credentials\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_SERVER_ERROR, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_SERVER_ERROR, errorJson);
     }
 }
 
 void ConfigServer::handleAPIReset() {
-    ESP_LOGI(TAG, "Request: GET %s", ENDPOINT_API_RESET);
+    ESP_LOGI(TAG, "Request: GET %s", EWIFI_ENDPOINT_API_RESET);
     
     enableCORS();
     
@@ -435,7 +435,7 @@ void ConfigServer::handleAPIReset() {
     json += "\"action\":\"Device will reboot in 2 seconds\"";
     json += "}";
     
-    sendJSON(HTTP_STATUS_OK, json);
+    sendJSON(EWIFI_HTTP_STATUS_OK, json);
     
     // Reboot after 2 seconds (non-blocking wait to allow response to send)
     unsigned long rebootTime = millis();
@@ -448,7 +448,7 @@ void ConfigServer::handleAPIReset() {
 void ConfigServer::handleOptions() {
     ESP_LOGD(TAG, "CORS preflight request");
     enableCORS();
-    server.send(HTTP_STATUS_NO_CONTENT);
+    server.send(EWIFI_HTTP_STATUS_NO_CONTENT);
 }
 
 void ConfigServer::handleNotFound() {
@@ -464,7 +464,7 @@ void ConfigServer::handleNotFound() {
         errorJson += "\"message\":\"API endpoint not found\",";
         errorJson += "\"path\":\"" + uri + "\"";
         errorJson += "}";
-        sendJSON(HTTP_STATUS_NOT_FOUND, errorJson);
+        sendJSON(EWIFI_HTTP_STATUS_NOT_FOUND, errorJson);
         return;
     }
     
@@ -555,7 +555,7 @@ void ConfigServer::handleAPIHealth() {
     
     String response;
     serializeJson(doc, response);
-    sendJSON(HTTP_STATUS_OK, response);
+    sendJSON(EWIFI_HTTP_STATUS_OK, response);
 }
 
 void ConfigServer::handleCredentials() {
@@ -563,14 +563,14 @@ void ConfigServer::handleCredentials() {
     
     String currentSSID = WiFi.SSID();
     String html = webPages.generateCredentialsPage(storage, currentSSID);
-    sendHTML(HTTP_STATUS_OK, html);
+    sendHTML(EWIFI_HTTP_STATUS_OK, html);
 }
 
 void ConfigServer::handleAPICredentialsDelete() {
     ESP_LOGD(TAG, "GET /api/credentials (delete via query)");
     
     if (!server.hasArg("ssid") || !server.hasArg("action")) {
-        sendHTML(HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Missing parameters"));
+        sendHTML(EWIFI_HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Missing parameters"));
         return;
     }
     
@@ -583,7 +583,7 @@ void ConfigServer::handleAPICredentialsDelete() {
         storage.getCredentialsList(ssidList);
         
         if (ssid == WiFi.SSID() && ssidList.size() == 1) {
-            sendHTML(HTTP_STATUS_BAD_REQUEST, 
+            sendHTML(EWIFI_HTTP_STATUS_BAD_REQUEST, 
                     webPages.generateErrorPage("Cannot delete the only network while connected to it. Add another network first."));
             return;
         }
@@ -604,9 +604,9 @@ void ConfigServer::handleAPICredentialsDelete() {
             
             // Redirect back to credentials page
             server.sendHeader("Location", "/credentials", true);
-            server.send(HTTP_STATUS_REDIRECT, "text/plain", "");
+            server.send(EWIFI_HTTP_STATUS_REDIRECT, "text/plain", "");
         } else {
-            sendHTML(HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
+            sendHTML(EWIFI_HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
         }
     } else if (action == "join") {
         // Verify the credential exists
@@ -622,13 +622,13 @@ void ConfigServer::handleAPICredentialsDelete() {
         }
         
         if (!found) {
-            sendHTML(HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
+            sendHTML(EWIFI_HTTP_STATUS_NOT_FOUND, webPages.generateErrorPage("Network not found"));
             return;
         }
         
         // Don't try to join if already connected
         if (ssid == WiFi.SSID() && WiFi.status() == WL_CONNECTED) {
-            sendHTML(HTTP_STATUS_BAD_REQUEST, 
+            sendHTML(EWIFI_HTTP_STATUS_BAD_REQUEST, 
                     webPages.generateErrorPage("Already connected to " + ssid));
             return;
         }
@@ -650,9 +650,9 @@ void ConfigServer::handleAPICredentialsDelete() {
         }
         
         // Redirect to status page to show connection progress
-        server.sendHeader("Location", ENDPOINT_STATUS, true);
-        server.send(HTTP_STATUS_REDIRECT, "text/plain", "");
+        server.sendHeader("Location", EWIFI_ENDPOINT_STATUS, true);
+        server.send(EWIFI_HTTP_STATUS_REDIRECT, "text/plain", "");
     } else {
-        sendHTML(HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Invalid action"));
+        sendHTML(EWIFI_HTTP_STATUS_BAD_REQUEST, webPages.generateErrorPage("Invalid action"));
     }
 }

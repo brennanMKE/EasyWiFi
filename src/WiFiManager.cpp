@@ -3,9 +3,9 @@
 #include <esp_wifi.h>
 #include <esp_task_wdt.h>
 
-static const char *TAG = TAG_WIFI_MANAGER;
+static const char *TAG = EWIFI_TAG_WIFI_MANAGER;
 
-WiFiManager::WiFiManager() : apActive(false), mdnsActive(false), dnsServer(nullptr), captivePortalActive(false), errorHandler(TAG_WIFI_MANAGER) {
+WiFiManager::WiFiManager() : apActive(false), mdnsActive(false), dnsServer(nullptr), captivePortalActive(false), errorHandler(EWIFI_TAG_WIFI_MANAGER) {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     
     // Configure retry policy for WiFi operations
@@ -43,7 +43,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
     // === PRE-SCAN: Check which networks are in range ===
     std::vector<bool> networkInRange(credentials.size(), true);  // Assume all in range by default
     
-    if (WIFI_PRE_SCAN_ENABLED) {
+    if (EWIFI_WIFI_PRE_SCAN_ENABLED) {
         ESP_LOGI(TAG, "========================================");
         ESP_LOGI(TAG, "Pre-Scan: Checking which networks are in range");
         ESP_LOGI(TAG, "========================================");
@@ -186,7 +186,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             ESP_LOGI(TAG, "Phase 1: Trying first network with eero-compatible settings");
             ESP_LOGI(TAG, "  Network 1/%d: %s", credentials.size(), credentials[0].ssid.c_str());
             ESP_LOGI(TAG, "  Settings: Low power (8.5dBm), 802.11b/g only");
-            ESP_LOGI(TAG, "  Timeout: %d seconds", WIFI_CONNECTION_TIMEOUT / 1000);
+            ESP_LOGI(TAG, "  Timeout: %d seconds", EWIFI_WIFI_CONNECTION_TIMEOUT / 1000);
             ESP_LOGI(TAG, "========================================");
         } else {
             ESP_LOGI(TAG, "========================================");
@@ -202,7 +202,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             // Poll WiFi.status() without blocking (check frequently, reset watchdog)
             status = WL_IDLE_STATUS;
             unsigned long lastCheck = millis();
-            while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
+            while (millis() - startTime < EWIFI_WIFI_CONNECTION_TIMEOUT) {
                 status = WiFi.status();
                 if (status == WL_CONNECTED) {
                     break;
@@ -311,7 +311,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
             // Poll WiFi.status() without blocking
             status = WL_IDLE_STATUS;
             unsigned long lastCheck = millis();
-            while (millis() - startTime < WIFI_CONNECTION_TIMEOUT) {
+            while (millis() - startTime < EWIFI_WIFI_CONNECTION_TIMEOUT) {
                 status = WiFi.status();
                 if (status == WL_CONNECTED) {
                     break;
@@ -387,7 +387,7 @@ WiFiError WiFiManager::connectToStoredNetworksEx(Storage& storage, ErrorContext*
         error = WiFiError::SSID_NOT_FOUND;
     } else if (status == WL_CONNECT_FAILED) {
         error = WiFiError::AUTH_FAILED;
-    } else if (elapsedTime >= WIFI_CONNECTION_TIMEOUT - 1000) {
+    } else if (elapsedTime >= EWIFI_WIFI_CONNECTION_TIMEOUT - 1000) {
         error = WiFiError::CONNECT_TIMEOUT;
     }
     
@@ -413,7 +413,7 @@ WiFiError WiFiManager::startAccessPointEx(const String& deviceName, ErrorContext
     
     // Generate unique AP SSID with custom device name
     apSSID = generateAPSSID(deviceName);
-    apPassword = AP_PASSWORD;
+    apPassword = EWIFI_AP_PASSWORD;
     
     ESP_LOGI(TAG, "Starting Access Point: %s", apSSID.c_str());
     
@@ -434,9 +434,9 @@ WiFiError WiFiManager::startAccessPointEx(const String& deviceName, ErrorContext
     IPAddress local_IP;
     IPAddress gateway;
     IPAddress subnet;
-    local_IP.fromString(AP_IP);
-    gateway.fromString(AP_GATEWAY);
-    subnet.fromString(AP_SUBNET);
+    local_IP.fromString(EWIFI_AP_IP);
+    gateway.fromString(EWIFI_AP_GATEWAY);
+    subnet.fromString(EWIFI_AP_SUBNET);
     
     if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
         ESP_LOGE(TAG, "Failed to configure AP IP");
@@ -450,9 +450,9 @@ WiFiError WiFiManager::startAccessPointEx(const String& deviceName, ErrorContext
     // Start AP
     bool success;
     if (apPassword.length() > 0) {
-        success = WiFi.softAP(apSSID.c_str(), apPassword.c_str(), AP_CHANNEL, 0, AP_MAX_CONNECTIONS);
+        success = WiFi.softAP(apSSID.c_str(), apPassword.c_str(), EWIFI_AP_CHANNEL, 0, EWIFI_AP_MAX_CONNECTIONS);
     } else {
-        success = WiFi.softAP(apSSID.c_str(), nullptr, AP_CHANNEL, 0, AP_MAX_CONNECTIONS);
+        success = WiFi.softAP(apSSID.c_str(), nullptr, EWIFI_AP_CHANNEL, 0, EWIFI_AP_MAX_CONNECTIONS);
     }
     
     if (!success) {
@@ -562,7 +562,7 @@ bool WiFiManager::scanNetworks(std::vector<WiFiNetwork>& results) {
 
 String WiFiManager::getStatus() {
     if (apActive) {
-        return STATUS_AP_MODE;
+        return EWIFI_STATUS_AP_MODE;
     }
     
     wl_status_t status = WiFi.status();
@@ -622,13 +622,13 @@ const char* WiFiManager::getWiFiStatusName(wl_status_t status) {
         case WL_SCAN_COMPLETED:
             return "Scan Completed";
         case WL_CONNECTED:
-            return STATUS_CONNECTED;
+            return EWIFI_STATUS_CONNECTED;
         case WL_CONNECT_FAILED:
             return "Connection Failed";
         case WL_CONNECTION_LOST:
             return "Connection Lost";
         case WL_DISCONNECTED:
-            return STATUS_DISCONNECTED;
+            return EWIFI_STATUS_DISCONNECTED;
         default:
             return "Unknown";
     }
@@ -734,12 +734,12 @@ bool WiFiManager::startCaptivePortal() {
     
     // Start DNS server on port 53, redirect all requests to AP IP
     IPAddress apIP;
-    apIP.fromString(AP_IP);
+    apIP.fromString(EWIFI_AP_IP);
     
     if (dnsServer->start(53, "*", apIP)) {
         captivePortalActive = true;
         ESP_LOGI(TAG, "Captive portal started successfully");
-        ESP_LOGI(TAG, "All DNS requests will redirect to %s", AP_IP);
+        ESP_LOGI(TAG, "All DNS requests will redirect to %s", EWIFI_AP_IP);
         return true;
     } else {
         ESP_LOGE(TAG, "Failed to start captive portal DNS server");
