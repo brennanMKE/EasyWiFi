@@ -15,7 +15,7 @@ void setup() {
     esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     
     ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "EasyWiFi v0.2.0");
+    ESP_LOGI(TAG, "EasyWiFi v0.3.0");
     ESP_LOGI(TAG, "ESP32-C3 WiFi Configuration System");
     ESP_LOGI(TAG, "========================================");
     

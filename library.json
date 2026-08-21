@@ -1,6 +1,6 @@
 {
   "name": "EasyWiFi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "WiFi configuration library with AP fallback and captive-portal web interface for ESP32",
   "keywords": "esp32, wifi, configuration, access-point, captive-portal, web-server, iot",
   "authors": {
@@ -15,7 +15,7 @@
   "platforms": "espressif32",
   "headers": "EasyWiFi.h",
   "dependencies": {
-    "ArduinoJson": "*"
+    "ArduinoJson": "^7.4.3"
   },
   "export": {
     "exclude": [
@@ -23,7 +23,14 @@
       ".vscode",
       "examples/**/.pio",
       "Docs",
-      "LIBRARY_RELEASE_TASK.md"
+      "dist",
+      "LIBRARY_RELEASE_TASK.md",
+      "build.sh",
+      "BUILD.md",
+      "EasyWiFi.code-workspace",
+      ".gitignore",
+      "include",
+      "test"
     ]
   }
 }

@@ -821,7 +821,6 @@ void WiFiManager::logWiFiDiagnostics() {
                                      WiFi.getMode() == WIFI_AP ? "AP" :
                                      WiFi.getMode() == WIFI_AP_STA ? "AP_STA" : "OFF");
     ESP_LOGI(TAG, "WiFi Status: %d (%s)", WiFi.status(), getWiFiStatusName((wl_status_t)WiFi.status()));
-    ESP_LOGI(TAG, "Auto-Connect: %s", WiFi.getAutoConnect() ? "Enabled" : "Disabled");
     ESP_LOGI(TAG, "Auto-Reconnect: %s", WiFi.getAutoReconnect() ? "Enabled" : "Disabled");
     ESP_LOGI(TAG, "WiFi Power: %.1f dBm", WiFi.getTxPower());
     ESP_LOGI(TAG, "Hostname: %s", WiFi.getHostname());

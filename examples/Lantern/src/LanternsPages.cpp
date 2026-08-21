@@ -154,14 +154,14 @@ void LanternsPages::handleLanternsSettings() {
 
 void LanternsPages::handleAPILanternsStatus() {
     // Example API endpoint returning JSON
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     
     doc["success"] = true;
     doc["device"] = "Lanterns";
     doc["version"] = "0.1.0";
     
     // Example: Include WiFi status
-    JsonObject wifi = doc.createNestedObject("wifi");
+    JsonObject wifi = doc["wifi"].to<JsonObject>();
     wifi["connected"] = wifiManager->isConnected();
     wifi["ssid"] = wifiManager->isConnected() ? WiFi.SSID() : "";
     wifi["rssi"] = wifiManager->isConnected() ? WiFi.RSSI() : 0;
@@ -198,7 +198,7 @@ void LanternsPages::handleAPILanternsControl() {
     // - Save settings to storage
     
     // Example response
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     doc["success"] = true;
     doc["brightness"] = brightness;
     doc["message"] = "Brightness updated";

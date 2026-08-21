@@ -167,9 +167,9 @@ platform = espressif32
 board = esp32-c3-devkitm-1
 framework = arduino
 lib_deps = 
-    https://github.com/brennanMKE/EasyWiFi.git#v0.2.0
+    https://github.com/brennanMKE/EasyWiFi.git#v0.3.0
 ```
-Omit the `#v0.2.0` suffix to track the default branch instead. PlatformIO finds
+Omit the `#v0.3.0` suffix to track the default branch instead. PlatformIO finds
 `library.json` and `EasyWiFi.h` at the repository root — no subdirectory path is needed.
 
 #### From Local Path (Development)

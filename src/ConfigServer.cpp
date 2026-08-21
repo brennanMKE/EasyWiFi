@@ -531,11 +531,11 @@ void ConfigServer::handleAPIHealth() {
     const ErrorStats& storageStats = storage.getErrorStats();
     
     // Create JSON response using ArduinoJson
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     doc["healthy"] = wifiManager.isHealthy() && storage.isHealthy();
     doc["uptime"] = millis() / 1000;
     
-    JsonObject wifi = doc.createNestedObject("wifi");
+    JsonObject wifi = doc["wifi"].to<JsonObject>();
     wifi["totalErrors"] = wifiStats.totalErrors;
     wifi["connectionErrors"] = wifiStats.connectionErrors;
     wifi["recoveredErrors"] = wifiStats.recoveredErrors;
@@ -543,13 +543,13 @@ void ConfigServer::handleAPIHealth() {
     wifi["lastErrorTime"] = wifiStats.lastErrorTime;
     wifi["healthy"] = wifiManager.isHealthy();
     
-    JsonObject storageObj = doc.createNestedObject("storage");
+    JsonObject storageObj = doc["storage"].to<JsonObject>();
     storageObj["totalErrors"] = storageStats.totalErrors;
     storageObj["storageErrors"] = storageStats.storageErrors;
     storageObj["consecutiveErrors"] = storageStats.consecutiveErrors;
     storageObj["healthy"] = storage.isHealthy();
     
-    JsonObject memory = doc.createNestedObject("memory");
+    JsonObject memory = doc["memory"].to<JsonObject>();
     memory["free"] = esp_get_free_heap_size();
     memory["minimum"] = esp_get_minimum_free_heap_size();
     

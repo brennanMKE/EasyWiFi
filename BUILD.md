@@ -79,12 +79,12 @@ Other PlatformIO projects depend on EasyWiFi by Git URL, pinned to a tag:
 
 ```ini
 lib_deps =
-    https://github.com/brennanMKE/EasyWiFi.git#v0.2.0
+    https://github.com/brennanMKE/EasyWiFi.git#v0.3.0
 ```
 
 Once published to the registry, the registry form also works:
 
 ```ini
 lib_deps =
-    brennanmke/EasyWiFi@^0.2.0
+    brennanmke/EasyWiFi@^0.3.0
 ```

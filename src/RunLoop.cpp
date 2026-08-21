@@ -1,5 +1,6 @@
 #include "RunLoop.h"
 #include <esp_task_wdt.h>
+#include <esp_idf_version.h>
 #include <esp_wifi.h>
 
 static const char *TAG = EWIFI_TAG_RUNLOOP;
@@ -37,7 +38,25 @@ void RunLoop::setup(const String& name) {
     
     // Initialize watchdog timer
     ESP_LOGI(TAG, "Initializing watchdog timer (%d seconds)", WDT_TIMEOUT);
-    esp_task_wdt_init(WDT_TIMEOUT, true);  // Enable panic on timeout
+#if ESP_IDF_VERSION_MAJOR >= 5
+    // IDF 5 takes a config struct. The framework may have already started the
+    // task watchdog, in which case init() reports ESP_ERR_INVALID_STATE and the
+    // timeout has to be applied with reconfigure() instead.
+    esp_task_wdt_config_t wdtConfig = {
+        .timeout_ms = WDT_TIMEOUT * 1000,
+        .idle_core_mask = 0,
+        .trigger_panic = true
+    };
+    esp_err_t wdtStatus = esp_task_wdt_init(&wdtConfig);
+    if (wdtStatus == ESP_ERR_INVALID_STATE) {
+        wdtStatus = esp_task_wdt_reconfigure(&wdtConfig);
+    }
+#else
+    esp_err_t wdtStatus = esp_task_wdt_init(WDT_TIMEOUT, true);  // Enable panic on timeout
+#endif
+    if (wdtStatus != ESP_OK) {
+        ESP_LOGW(TAG, "Watchdog init failed: %s", esp_err_to_name(wdtStatus));
+    }
     esp_task_wdt_add(NULL);  // Add current task
     
     // Suppress verbose hardware logs (LED PWM, WiFi stack details)
